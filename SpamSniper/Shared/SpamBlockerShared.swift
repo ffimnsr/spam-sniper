@@ -12,22 +12,8 @@ enum SpamBlockerShared {
     static let extensionIdentifier = "com.vastorigins.app.SpamSniper.CallBlockerExtension"
 
     private static let isEnabledKey = "spamBlocker.isEnabled"
-    private static let blockedNumbersKey = "spamBlocker.blockedNumbers"
-
-    static let defaultBlockedNumbers: [Int64] = [
-        1_408_555_1234,
-        1_408_555_5678,
-        1_650_555_0100,
-        1_800_555_1212,
-        1_877_555_0199
-    ]
-
     static var blockedNumbers: [Int64] {
-        let numbers = sharedDefaults.array(forKey: blockedNumbersKey) as? [Int64]
-        let source = numbers?.isEmpty == false ? numbers! : defaultBlockedNumbers
-        return source
-            .filter { $0 > 0 }
-            .sorted()
+        (try? BlocklistSyncService.fetchSnapshot().blockedNumbers) ?? []
     }
 
     static var isEnabled: Bool {
@@ -45,8 +31,7 @@ enum SpamBlockerShared {
 
     static func registerDefaults() {
         sharedDefaults.register(defaults: [
-            isEnabledKey: true,
-            blockedNumbersKey: defaultBlockedNumbers
+            isEnabledKey: true
         ])
     }
 

@@ -157,13 +157,54 @@ struct ContentView: View {
 
     private var detailsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("How It Works")
+            Text("Blocklist Intelligence")
                 .font(.title3.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Source")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                Text(model.blocklistSource)
+                    .font(.subheadline.weight(.semibold))
+                Text("Last synced \(model.lastSyncDescription).")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !model.sampleEntries.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Sample Entries")
+                        .font(.headline)
+
+                    ForEach(model.sampleEntries) { entry in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(entry.displayName)
+                                    .font(.subheadline.weight(.semibold))
+                                Spacer()
+                                Text(entry.confidence.uppercased())
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(Color(red: 0.84, green: 0.24, blue: 0.19))
+                            }
+
+                            Text(entry.phoneNumberE164)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+
+                            Text("\(entry.category.capitalized) • \(entry.aliases.joined(separator: ", "))")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(14)
+                        .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                }
+            }
 
             infoRow(
                 symbol: "list.bullet.rectangle.portrait",
                 title: "Preloaded blocklist",
-                detail: "SpamSniper ships with a predefined set of spam numbers stored in a shared app group."
+                detail: "SpamSniper imports a repo-friendly JSON blocklist into a shared SQLite database inside the app group."
             )
 
             infoRow(
@@ -174,8 +215,8 @@ struct ContentView: View {
 
             infoRow(
                 symbol: "arrow.triangle.2.circlepath",
-                title: "Ready for future sync",
-                detail: "The shared blocklist layer is set up so the source can later move to a Git-backed feed without reworking the UI."
+                title: "Daily sync-ready",
+                detail: "The app refreshes blocklist data on a daily cadence while launching or returning to the foreground, with a remote fetch hook ready for the repo URL."
             )
         }
         .cardStyle()

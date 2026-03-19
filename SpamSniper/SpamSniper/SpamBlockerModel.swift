@@ -31,16 +31,24 @@ final class SpamBlockerModel {
 
     var isBlockingEnabled = SpamBlockerShared.isEnabled
     var extensionStatus: ExtensionStatus = .unknown
-    var blockedNumberCount = SpamBlockerShared.blockedNumbers.count
+    var blockedNumberCount = 0
+    var blocklistSource = "Loading"
+    var lastSyncDescription = "Not synced yet"
+    var sampleEntries: [BlockedNumberRecord] = []
     var isBusy = false
     var errorMessage: String?
 
     func refresh() async {
         SpamBlockerShared.registerDefaults()
         isBlockingEnabled = SpamBlockerShared.isEnabled
-        blockedNumberCount = SpamBlockerShared.blockedNumbers.count
 
         do {
+            let summary = try await BlocklistSyncService.refreshIfNeeded()
+            let snapshot = try BlocklistSyncService.fetchSnapshot()
+            blockedNumberCount = summary.totalEntries
+            blocklistSource = summary.source ?? snapshot.source
+            lastSyncDescription = summary.syncedAt.map { Self.syncFormatter.localizedString(for: $0, relativeTo: Date()) } ?? "Not synced yet"
+            sampleEntries = Array(snapshot.records.prefix(3))
             extensionStatus = try await fetchExtensionStatus()
             errorMessage = nil
         } catch {
@@ -117,4 +125,10 @@ final class SpamBlockerModel {
             }
         }
     }
+
+    private static let syncFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter
+    }()
 }

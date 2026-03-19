@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "generated_at": "2026-03-19T00:00:00Z",
+  "source": "SpamSniper sample community blocklist",
+  "notes": [
+    "Commit this file to the blocklist repo and expose the raw file URL for the app sync job.",
+    "Numbers use E.164 format so they can be normalized cleanly into the local app database.",
+    "Aliases, tags, category, and notes are meant to stay human-readable in reviews."
+  ],
+  "entries": [
+    {
+      "phone_number_e164": "+14085551234",
+      "display_name": "Velocity Loan Center",
+      "category": "loan scam",
+      "confidence": "high",
+      "aliases": ["Velocity Loans", "VLC Approval Desk"],
+      "tags": ["financial", "spoofed", "robocall"],
+      "notes": "Uses urgent approval language and rotating caller names."
+    },
+    {
+      "phone_number_e164": "+14085555678",
+      "display_name": "Parcel Release Hotline",
+      "category": "delivery scam",
+      "confidence": "high",
+      "aliases": ["Package Dispatch", "Missed Delivery Desk"],
+      "tags": ["delivery", "smishing-followup", "robocall"],
+      "notes": "Targets missed package victims and asks for card verification."
+    },
+    {
+      "phone_number_e164": "+16505550100",
+      "display_name": "Metro Rewards Verification",
+      "category": "prize scam",
+      "confidence": "medium",
+      "aliases": ["Metro Rewards", "Rewards Claims Team"],
+      "tags": ["sweepstakes", "social-engineering"],
+      "notes": "Promises gift cards after identity confirmation."
+    },
+    {
+      "phone_number_e164": "+18005551212",
+      "display_name": "National Warranty Renewal",
+      "category": "extended warranty scam",
+      "confidence": "high",
+      "aliases": ["Warranty Services", "Vehicle Coverage Desk"],
+      "tags": ["automotive", "repeat-offender"],
+      "notes": "High-volume robocalls claiming car coverage is expiring."
+    },
+    {
+      "phone_number_e164": "+18775550199",
+      "display_name": "Tax Resolution Intake",
+      "category": "government impersonation",
+      "confidence": "high",
+      "aliases": ["IRS Resolution Unit", "Federal Tax Mediation"],
+      "tags": ["tax", "impersonation", "payment-pressure"],
+      "notes": "Uses tax debt scare tactics and demands immediate callback."
+    }
+  ]
+}

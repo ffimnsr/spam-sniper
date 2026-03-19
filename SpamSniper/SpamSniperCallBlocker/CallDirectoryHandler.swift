@@ -21,7 +21,9 @@ final class CallDirectoryHandler: CXCallDirectoryProvider {
             return
         }
 
-        for phoneNumber in SpamBlockerShared.blockedNumbers {
+        let numbers = (try? BlocklistSyncService.fetchSnapshot().blockedNumbers) ?? SpamBlockerShared.blockedNumbers
+
+        for phoneNumber in numbers {
             context.addBlockingEntry(withNextSequentialPhoneNumber: phoneNumber)
         }
 

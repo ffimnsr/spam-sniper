@@ -40,18 +40,10 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		A10000062F6BBE9600A2D40B /* Exceptions for "SpamSniper" folder in "SpamSniper" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				SpamSniper.entitlements,
-			);
-			target = 98E5C1102F6BBE9600A2D40B /* SpamSniper */;
-		};
 		A10000072F6BBE9600A2D40B /* Exceptions for "SpamSniperCallBlocker" folder in "SpamSniperCallBlocker" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				SpamSniperCallBlocker.entitlements,
 			);
 			target = A10000022F6BBE9600A2D40B /* SpamSniperCallBlocker */;
 		};
@@ -60,9 +52,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		98E5C1132F6BBE9600A2D40B /* SpamSniper */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				A10000062F6BBE9600A2D40B /* Exceptions for "SpamSniper" folder in "SpamSniper" target */,
-			);
 			path = SpamSniper;
 			sourceTree = "<group>";
 		};
