@@ -73,6 +73,5 @@ enum BlocklistSyncService {
 
     private static let decoder = JSONDecoder()
 
-    // Replace with the raw URL of the committed blocklist file when the repo is ready.
-    private static let remoteURL: URL? = nil
+    private static let remoteURL = URL(string: "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklists/spam-blocklist-v1.json")
 }

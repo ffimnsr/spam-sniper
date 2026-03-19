@@ -49,6 +49,7 @@ final class SpamBlockerModel {
             blocklistSource = summary.source ?? snapshot.source
             lastSyncDescription = summary.syncedAt.map { Self.syncFormatter.localizedString(for: $0, relativeTo: Date()) } ?? "Not synced yet"
             sampleEntries = Array(snapshot.records.prefix(3))
+            try? await reloadExtension()
             extensionStatus = try await fetchExtensionStatus()
             errorMessage = nil
         } catch {
