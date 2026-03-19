@@ -1,0 +1,37 @@
+# Xcode user data
+xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+
+# Build products
+build/
+DerivedData/
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+
+# CocoaPods / Carthage
+Pods/
+Carthage/Build/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output/
+
+# Archives and logs
+*.moved-aside
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.log
+
+# macOS
+.DS_Store
+
+# Remove unused MD files
+*.md
+!README.md
