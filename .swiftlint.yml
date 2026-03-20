@@ -1,0 +1,59 @@
+included:
+  - SpamSniper
+
+excluded:
+  - SpamSniper/.build
+  - SpamSniper/DerivedData
+  - SpamSniper/SpamSniper.xcodeproj
+  - SpamSniper/SpamSniper.xcworkspace
+  - SpamSniper/build
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - force_unwrapping
+  - redundant_nil_coalescing
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+  - vertical_parameter_alignment_on_call
+
+disabled_rules:
+  - trailing_whitespace
+  - todo
+
+analyzer_rules:
+  - unused_import
+  - unused_declaration
+
+line_length:
+  warning: 140
+  error: 180
+  ignores_comments: true
+  ignores_urls: true
+
+type_body_length:
+  warning: 300
+  error: 450
+
+file_length:
+  warning: 500
+  error: 700
+
+function_body_length:
+  warning: 50
+  error: 80
+
+identifier_name:
+  min_length:
+    warning: 2
+    error: 1
+  excluded:
+    - id
+    - x
+    - y
+
+nesting:
+  type_level:
+    warning: 2
+
+reporter: "xcode"

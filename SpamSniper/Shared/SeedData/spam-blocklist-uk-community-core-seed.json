@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "generated_at": "2026-03-20T00:00:00Z",
+  "source": "SpamSniper UK community feed",
+  "notes": [
+    "Bundled mirror of blocklist/UK/community-core.json."
+  ],
+  "entries": [
+    {
+      "phone_number_e164": "+442045551111",
+      "display_name": "HMRC Dispute Centre",
+      "category": "government impersonation",
+      "confidence": "high",
+      "aliases": ["HMRC Settlement Unit", "Revenue Action Desk"],
+      "tags": ["tax", "impersonation", "payment-pressure"],
+      "notes": "Pressures targets to settle fake tax cases through immediate payment."
+    },
+    {
+      "phone_number_e164": "+447700900321",
+      "display_name": "Royal Mail Redelivery",
+      "category": "delivery scam",
+      "confidence": "medium",
+      "aliases": ["Royal Mail Dispatch", "Parcel Retry Team"],
+      "tags": ["delivery", "smishing-followup"],
+      "notes": "Combines text lures with callback requests to collect card details."
+    },
+    {
+      "phone_number_e164": "+448000112233",
+      "display_name": "Bank Secure Review",
+      "category": "bank impersonation",
+      "confidence": "high",
+      "aliases": ["Fraud Review Unit", "Account Secure Team"],
+      "tags": ["banking", "social-engineering", "otp-harvest"],
+      "notes": "Pretends to investigate suspicious charges and asks for one-time codes."
+    }
+  ]
+}

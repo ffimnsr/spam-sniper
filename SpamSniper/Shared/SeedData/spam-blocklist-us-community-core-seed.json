@@ -1,11 +1,9 @@
 {
   "version": 1,
-  "generated_at": "2026-03-19T00:00:00Z",
-  "source": "Legacy bundled seed data retained for compatibility",
+  "generated_at": "2026-03-20T00:00:00Z",
+  "source": "SpamSniper US community feed",
   "notes": [
-    "Numbers must be provided in E.164 format.",
-    "Aliases can include brand variations, abbreviations, or campaign names.",
-    "Confidence is a human-readable score intended to be easy to review in Git diffs."
+    "Bundled mirror of blocklist/US/community-core.json."
   ],
   "entries": [
     {
@@ -16,24 +14,6 @@
       "aliases": ["Velocity Loans", "VLC Approval Desk"],
       "tags": ["financial", "spoofed", "robocall"],
       "notes": "Uses urgent approval language and rotating caller names."
-    },
-    {
-      "phone_number_e164": "+14085555678",
-      "display_name": "Parcel Release Hotline",
-      "category": "delivery scam",
-      "confidence": "high",
-      "aliases": ["Package Dispatch", "Missed Delivery Desk"],
-      "tags": ["delivery", "smishing-followup", "robocall"],
-      "notes": "Targets missed package victims and asks for card verification."
-    },
-    {
-      "phone_number_e164": "+16505550100",
-      "display_name": "Metro Rewards Verification",
-      "category": "prize scam",
-      "confidence": "medium",
-      "aliases": ["Metro Rewards", "Rewards Claims Team"],
-      "tags": ["sweepstakes", "social-engineering"],
-      "notes": "Promises gift cards after identity confirmation."
     },
     {
       "phone_number_e164": "+18005551212",

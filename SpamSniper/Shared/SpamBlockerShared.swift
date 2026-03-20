@@ -12,6 +12,7 @@ enum SpamBlockerShared {
     static let extensionIdentifier = "com.vastorigins.app.SpamSniper.CallBlockerExtension"
 
     private static let isEnabledKey = "spamBlocker.isEnabled"
+    private static let selectedBlocklistKey = "spamBlocker.selectedBlocklist"
     static var blockedNumbers: [Int64] {
         (try? BlocklistSyncService.fetchSnapshot().blockedNumbers) ?? []
     }
@@ -33,6 +34,23 @@ enum SpamBlockerShared {
         sharedDefaults.register(defaults: [
             isEnabledKey: true
         ])
+    }
+
+    static var selectedBlocklist: StoredBlocklistSelection? {
+        get {
+            guard let data = sharedDefaults.data(forKey: selectedBlocklistKey) else {
+                return nil
+            }
+
+            return try? JSONDecoder().decode(StoredBlocklistSelection.self, from: data)
+        }
+        set {
+            if let newValue, let data = try? JSONEncoder().encode(newValue) {
+                sharedDefaults.set(data, forKey: selectedBlocklistKey)
+            } else {
+                sharedDefaults.removeObject(forKey: selectedBlocklistKey)
+            }
+        }
     }
 
     private static var sharedDefaults: UserDefaults {

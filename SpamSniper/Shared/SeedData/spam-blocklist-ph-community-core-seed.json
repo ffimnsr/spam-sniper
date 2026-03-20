@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "generated_at": "2026-03-20T00:00:00Z",
+  "source": "SpamSniper PH community feed",
+  "notes": [
+    "Bundled mirror of blocklist/PH/community-core.json."
+  ],
+  "entries": [
+    {
+      "phone_number_e164": "+63285551234",
+      "display_name": "Maya Rewards Desk",
+      "category": "wallet phishing",
+      "confidence": "high",
+      "aliases": ["Maya Bonus Center", "Maya Promo Agent"],
+      "tags": ["fintech", "otp-harvest", "robocall"],
+      "notes": "Claims account reward redemption is blocked until OTP is confirmed."
+    },
+    {
+      "phone_number_e164": "+639175550321",
+      "display_name": "LBC Parcel Verification",
+      "category": "delivery scam",
+      "confidence": "medium",
+      "aliases": ["LBC Delivery Team", "Parcel Exception Desk"],
+      "tags": ["delivery", "card-capture"],
+      "notes": "Asks for a payment card to clear a fake parcel hold."
+    },
+    {
+      "phone_number_e164": "+639988880777",
+      "display_name": "BIR Settlement Hotline",
+      "category": "government impersonation",
+      "confidence": "high",
+      "aliases": ["BIR Collections", "Tax Audit Resolution"],
+      "tags": ["tax", "impersonation", "payment-pressure"],
+      "notes": "Uses audit threats and demands same-day e-wallet payment."
+    }
+  ]
+}

@@ -17,6 +17,7 @@ enum BlocklistDatabaseError: Error {
 
 struct BlocklistDatabaseSummary {
     let totalEntries: Int
+    let blocklistID: String?
     let source: String?
     let syncedAt: Date?
 }
@@ -51,7 +52,12 @@ enum BlocklistDatabase {
         }
     }
 
-    static func replaceEntries(_ records: [BlockedNumberRecord], source: String, syncedAt: Date) throws {
+    static func replaceEntries(
+        _ records: [BlockedNumberRecord],
+        blocklistID: String,
+        source: String,
+        syncedAt: Date
+    ) throws {
         try withDatabase { database in
             try execute("BEGIN IMMEDIATE TRANSACTION;", database: database)
 
@@ -99,6 +105,7 @@ enum BlocklistDatabase {
                     }
                 }
 
+                try setMetadataValue(blocklistID, forKey: "blocklist_id", database: database)
                 try setMetadataValue(source, forKey: "source", database: database)
                 try setMetadataValue(iso8601Formatter.string(from: syncedAt), forKey: "synced_at", database: database)
                 try execute("COMMIT;", database: database)
@@ -151,6 +158,7 @@ enum BlocklistDatabase {
 
             return BlocklistSnapshot(
                 records: records,
+                blocklistID: metadataValue(forKey: "blocklist_id", database: database),
                 source: metadataValue(forKey: "source", database: database) ?? "Unknown source",
                 syncedAt: metadataValue(forKey: "synced_at", database: database).flatMap { iso8601Formatter.date(from: $0) }
             )
@@ -175,6 +183,7 @@ enum BlocklistDatabase {
 
             return BlocklistDatabaseSummary(
                 totalEntries: totalEntries,
+                blocklistID: metadataValue(forKey: "blocklist_id", database: database),
                 source: metadataValue(forKey: "source", database: database),
                 syncedAt: metadataValue(forKey: "synced_at", database: database).flatMap { iso8601Formatter.date(from: $0) }
             )
@@ -186,7 +195,8 @@ enum BlocklistDatabase {
         let url = try databaseURL
 
         var database: OpaquePointer?
-        guard sqlite3_open_v2(url.path, &database, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK else {
+        let flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX
+        guard sqlite3_open_v2(url.path, &database, flags, nil) == SQLITE_OK else {
             throw BlocklistDatabaseError.openDatabaseFailed
         }
         defer { sqlite3_close(database) }
@@ -204,7 +214,9 @@ enum BlocklistDatabase {
 
     private static var databaseURL: URL {
         get throws {
-            guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SpamBlockerShared.appGroupIdentifier) else {
+            guard let containerURL = FileManager.default.containerURL(
+                forSecurityApplicationGroupIdentifier: SpamBlockerShared.appGroupIdentifier
+            ) else {
                 throw BlocklistDatabaseError.sharedContainerUnavailable
             }
 

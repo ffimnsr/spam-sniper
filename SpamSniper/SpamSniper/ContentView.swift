@@ -1,10 +1,3 @@
-//
-//  ContentView.swift
-//  SpamSniper
-//
-//  Created by pastel on 3/19/26.
-//
-
 import SwiftUI
 
 struct ContentView: View {
@@ -12,28 +5,35 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                heroCard
-                controlsCard
-                statsRow
-                detailsCard
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    heroCard
+                    controlsCard
+                    statsRow
+                    detailsCard
 
-                if let errorMessage = model.errorMessage {
-                    errorCard(message: errorMessage)
+                    if let errorMessage = model.errorMessage {
+                        errorCard(message: errorMessage)
+                    }
                 }
+                .padding(20)
+                .padding(.bottom, 104)
             }
-            .padding(20)
-        }
-        .background(backgroundGradient)
-        .task {
-            await model.refresh()
-        }
-        .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active else { return }
-
-            Task {
+            .background(backgroundGradient)
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) {
+                stickyProtectionBar
+            }
+            .task {
                 await model.refresh()
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                guard newPhase == .active else { return }
+
+                Task {
+                    await model.refresh()
+                }
             }
         }
     }
@@ -86,7 +86,7 @@ struct ContentView: View {
     private var controlsCard: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Text("Protection")
+                Text("Setup & Safety")
                     .font(.title3.weight(.semibold))
                 Spacer()
                 Circle()
@@ -94,17 +94,43 @@ struct ContentView: View {
                     .frame(width: 10, height: 10)
             }
 
-            Toggle(isOn: bindingForToggle) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Block calls on the spam list")
-                        .font(.headline)
-                    Text("Turning this off clears the blocker until you enable it again.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+            setupRow(
+                symbol: "phone.connection.fill",
+                title: "Protection switch stays pinned",
+                detail: "Use the bottom bar at any time to enable or disable SpamSniper without losing your place."
+            )
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Contacts Safety")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                Text(model.contactsStatusDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            .disabled(model.isBusy)
-            .tint(Color(red: 0.04, green: 0.46, blue: 0.54))
+
+            if model.contactsPermissionState == .notDetermined {
+                Button {
+                    Task {
+                        await model.requestContactsAccess()
+                    }
+                } label: {
+                    HStack {
+                        Text("Allow Contacts Protection")
+                        Spacer()
+                        Image(systemName: "person.crop.circle.badge.plus")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color(red: 0.04, green: 0.46, blue: 0.54))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background(
+                        Color(red: 0.04, green: 0.46, blue: 0.54).opacity(0.08),
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
 
             if model.extensionStatus != .enabled {
                 Button {
@@ -139,6 +165,64 @@ struct ContentView: View {
         .cardStyle()
     }
 
+    private var stickyProtectionBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .opacity(0.2)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text(stickyStatusDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+
+                Button {
+                    Task {
+                        await model.setBlockingEnabled(!model.isBlockingEnabled)
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: model.isBlockingEnabled ? "shield.fill" : "shield.slash.fill")
+                            .font(.headline)
+
+                        Text(model.isBlockingEnabled ? "Disable SpamSniper Protection" : "Enable SpamSniper Protection")
+                            .font(.headline.weight(.semibold))
+
+                        Spacer()
+
+                        Circle()
+                            .fill(.white.opacity(0.92))
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                                Image(systemName: model.isBlockingEnabled ? "checkmark" : "power")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(buttonAccentColor)
+                            )
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 18)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        LinearGradient(
+                            colors: buttonGradientColors,
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isBusy)
+                .opacity(model.isBusy ? 0.7 : 1)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 18)
+            .background(.ultraThinMaterial)
+        }
+    }
+
     private var statsRow: some View {
         HStack(spacing: 14) {
             statCard(
@@ -161,6 +245,39 @@ struct ContentView: View {
                 .font(.title3.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 8) {
+                Text("Selected Blocklist")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                Text(model.selectedBlocklistTitle)
+                    .font(.subheadline.weight(.semibold))
+                Text(model.selectedBlocklistCountry)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Text(model.selectedBlocklistDescription)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            NavigationLink {
+                BlocklistSelectionView(model: model)
+            } label: {
+                HStack {
+                    Text("Choose Blocklist")
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color(red: 0.04, green: 0.46, blue: 0.54))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(
+                    Color(red: 0.04, green: 0.46, blue: 0.54).opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Source")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.secondary)
@@ -169,6 +286,15 @@ struct ContentView: View {
                 Text("Last synced \(model.lastSyncDescription).")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Signature")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                Text(model.blocklistSignatureLocation)
+                    .font(.footnote.monospaced())
+                    .textSelection(.enabled)
             }
 
             if !model.sampleEntries.isEmpty {
@@ -202,13 +328,19 @@ struct ContentView: View {
             }
 
             infoRow(
-                symbol: "list.bullet.rectangle.portrait",
-                title: "Preloaded blocklist",
-                detail: "SpamSniper imports a repo-friendly JSON blocklist into a shared SQLite database inside the app group."
+                symbol: "person.crop.circle.badge.checkmark",
+                title: "Contacts-aware filtering",
+                detail: "SpamSniper asks for Contacts access only to avoid blocking phone numbers that already exist in your address book."
             )
 
             infoRow(
-                symbol: "phone.badge.shield.checkmark",
+                symbol: "list.bullet.rectangle.portrait",
+                title: "Repo-driven blocklists",
+                detail: "SpamSniper reads a repo index, lets you choose a country-specific list, and imports that JSON blocklist into the shared SQLite database."
+            )
+
+            infoRow(
+                symbol: "phone.arrow.up.right",
                 title: "System-level call blocking",
                 detail: "The Call Directory extension hands those numbers to iOS so matching calls can be blocked by the system."
             )
@@ -216,116 +348,13 @@ struct ContentView: View {
             infoRow(
                 symbol: "arrow.triangle.2.circlepath",
                 title: "Daily sync-ready",
-                detail: "The app refreshes blocklist data on a daily cadence while launching or returning to the foreground, with a remote fetch hook ready for the repo URL."
+                detail: """
+                The app refreshes blocklist data on a daily cadence while launching or returning \
+                to the foreground, fetching the repo index first so your selected country list stays current.
+                """
             )
         }
         .cardStyle()
-    }
-
-    private func errorCard(message: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-
-            Text(message)
-                .font(.footnote)
-                .foregroundStyle(.primary)
-        }
-        .padding(18)
-        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(Color.orange.opacity(0.18), lineWidth: 1)
-        )
-    }
-
-    private func statCard(title: String, value: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title.uppercased())
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.secondary)
-
-            Text(value)
-                .font(.system(size: 28, weight: .black, design: .rounded))
-                .foregroundStyle(.primary)
-
-            Text(detail)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle()
-    }
-
-    private func infoRow(symbol: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: symbol)
-                .font(.headline)
-                .foregroundStyle(Color(red: 0.04, green: 0.46, blue: 0.54))
-                .frame(width: 24)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func statusPill(title: String) -> some View {
-        Text(title)
-            .font(.caption.weight(.bold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(.white.opacity(0.15), in: Capsule())
-    }
-
-    private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.95, green: 0.97, blue: 0.99),
-                Color(red: 0.90, green: 0.95, blue: 0.96)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
-    }
-
-    private var statusTitle: String {
-        switch model.extensionStatus {
-        case .enabled:
-            return "Extension Ready"
-        case .disabled:
-            return "Needs Setup"
-        case .unknown:
-            return "Checking"
-        }
-    }
-
-    private var statusShortValue: String {
-        switch model.extensionStatus {
-        case .enabled:
-            return "Ready"
-        case .disabled:
-            return "Off"
-        case .unknown:
-            return "..."
-        }
-    }
-
-    private var bindingForToggle: Binding<Bool> {
-        Binding(
-            get: { model.isBlockingEnabled },
-            set: { newValue in
-                Task {
-                    await model.setBlockingEnabled(newValue)
-                }
-            }
-        )
     }
 }
 
@@ -344,4 +373,172 @@ private extension View {
 
 #Preview {
     ContentView()
+}
+
+private extension ContentView {
+    func errorCard(message: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(.primary)
+        }
+        .padding(18)
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.orange.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    func statCard(title: String, value: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(.system(size: 28, weight: .black, design: .rounded))
+                .foregroundStyle(.primary)
+
+            Text(detail)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
+    }
+
+    func infoRow(symbol: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol)
+                .font(.headline)
+                .foregroundStyle(Color(red: 0.04, green: 0.46, blue: 0.54))
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    func setupRow(symbol: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: symbol)
+                .font(.headline)
+                .foregroundStyle(Color(red: 0.84, green: 0.24, blue: 0.19))
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    func statusPill(title: String) -> some View {
+        Text(title)
+            .font(.caption.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.white.opacity(0.15), in: Capsule())
+    }
+
+    var backgroundGradient: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.95, green: 0.97, blue: 0.99),
+                Color(red: 0.90, green: 0.95, blue: 0.96)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+
+    var statusTitle: String {
+        switch model.extensionStatus {
+        case .enabled:
+            return "Extension Ready"
+        case .disabled:
+            return "Needs Setup"
+        case .unknown:
+            return "Checking"
+        case .unavailableOnSimulator:
+            return "Simulator"
+        }
+    }
+
+    var statusShortValue: String {
+        switch model.extensionStatus {
+        case .enabled:
+            return "Ready"
+        case .disabled:
+            return "Off"
+        case .unknown:
+            return "..."
+        case .unavailableOnSimulator:
+            return "Sim"
+        }
+    }
+
+    var bindingForToggle: Binding<Bool> {
+        Binding(
+            get: { model.isBlockingEnabled },
+            set: { newValue in
+                Task {
+                    await model.setBlockingEnabled(newValue)
+                }
+            }
+        )
+    }
+
+    var stickyStatusDescription: String {
+        if model.isBusy {
+            return "Updating protection settings."
+        }
+
+        switch model.extensionStatus {
+        case .enabled:
+            return "Calls matching the synced blocklist can be blocked by iOS."
+        case .disabled:
+            return "Turn on the Call Blocking extension in Settings for full protection."
+        case .unknown:
+            return "Checking call blocking status."
+        case .unavailableOnSimulator:
+            return "Simulator can preview the UI, but call blocking must be tested on a real iPhone."
+        }
+    }
+
+    var buttonGradientColors: [Color] {
+        if model.isBlockingEnabled {
+            return [
+                Color(red: 0.04, green: 0.46, blue: 0.54),
+                Color(red: 0.07, green: 0.63, blue: 0.67)
+            ]
+        }
+
+        return [
+            Color(red: 0.34, green: 0.39, blue: 0.45),
+            Color(red: 0.23, green: 0.27, blue: 0.33)
+        ]
+    }
+
+    var buttonAccentColor: Color {
+        model.isBlockingEnabled
+            ? Color(red: 0.04, green: 0.46, blue: 0.54)
+            : Color(red: 0.23, green: 0.27, blue: 0.33)
+    }
 }
