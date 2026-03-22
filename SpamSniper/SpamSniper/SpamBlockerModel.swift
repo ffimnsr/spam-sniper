@@ -37,13 +37,12 @@ final class SpamBlockerModel {
     var contactsPermissionState: ContactFilterSnapshot.PermissionState = .notDetermined
     var blockedNumberCount = 0
     var blocklistSource = "Loading"
-    var selectedBlocklistID = ""
+    var selectedBlocklistIDs: Set<String> = []
     var selectedBlocklistTitle = "Loading"
     var selectedBlocklistDescription = ""
     var selectedBlocklistCountry = ""
-    var blocklistSignatureLocation = "Unavailable"
+    var blocklistSignatureStatus = "Checking"
     var lastSyncDescription = "Not synced yet"
-    var sampleEntries: [BlockedNumberRecord] = []
     var availableBlocklists: [BlocklistRepositoryCountry] = []
     var contactsStatusDescription = ContactFilterSnapshot.PermissionState.notDetermined.description
     var isBusy = false
@@ -58,15 +57,16 @@ final class SpamBlockerModel {
 
         do {
             let repository = try await BlocklistSyncService.fetchRepository()
-            applyRepository(repository)
+            let selections = applyRepository(repository)
+            await updateSignatureStatus(for: selections)
             let snapshot = try BlocklistSyncService.fetchSnapshot()
             applySnapshot(snapshot)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = userFacingMessage(for: error)
         }
 
         do {
-            let shouldExcludeContacts = contactsPermissionState == .authorized
+            let shouldExcludeContacts = contactsPermissionState == .authorized || contactsPermissionState == .limited
             let contactNumbers = if shouldExcludeContacts {
                 await ContactFilteringService.loadSnapshot().phoneNumbers
             } else {
@@ -74,7 +74,8 @@ final class SpamBlockerModel {
             }
 
             let repository = try await BlocklistSyncService.fetchRepository()
-            applyRepository(repository)
+            let selections = applyRepository(repository)
+            await updateSignatureStatus(for: selections)
             let summary = try await BlocklistSyncService.refreshIfNeeded(excluding: contactNumbers)
             let snapshot = try BlocklistSyncService.fetchSnapshot()
             applySummary(summary, snapshot: snapshot)
@@ -83,7 +84,7 @@ final class SpamBlockerModel {
             errorMessage = nil
         } catch {
             extensionStatus = fallbackExtensionStatus(for: error)
-            errorMessage = error.localizedDescription
+            errorMessage = userFacingMessage(for: error)
         }
     }
 
@@ -104,20 +105,63 @@ final class SpamBlockerModel {
             try await reloadExtension()
             extensionStatus = try await fetchExtensionStatus()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = userFacingMessage(for: error)
         }
 
         isBusy = false
     }
 
-    func selectBlocklist(_ entry: BlocklistCatalogEntry) async {
+    func toggleBlocklistSelection(_ entry: BlocklistCatalogEntry) async {
         isRefreshingBlocklists = true
         errorMessage = nil
-        BlocklistSyncService.updateSelectedBlocklist(to: entry)
-        applySelection(StoredBlocklistSelection(entry: entry))
+
+        let repositoryEntries = availableBlocklists.flatMap { country in
+            country.blocklists.map { repositoryEntry in
+                BlocklistCatalogEntry(
+                    id: repositoryEntry.id,
+                    countryCode: country.code,
+                    countryName: country.name,
+                    title: repositoryEntry.title,
+                    description: repositoryEntry.description,
+                    source: repositoryEntry.source,
+                    documentURL: BlocklistSyncService.repositoryURL?
+                        .deletingLastPathComponent()
+                        .appending(path: repositoryEntry.path),
+                    signatureURL: {
+                        let value = repositoryEntry.signatureURL ?? country.signatureURL
+                        guard let value else {
+                            return nil
+                        }
+
+                        if let absoluteURL = URL(string: value), absoluteURL.scheme != nil {
+                            return absoluteURL
+                        }
+
+                        return BlocklistSyncService.repositoryURL?
+                            .deletingLastPathComponent()
+                            .appending(path: value)
+                    }()
+                )
+            }
+        }
+
+        var nextSelections = repositoryEntries.filter { selectedBlocklistIDs.contains($0.id) }
+
+        if selectedBlocklistIDs.contains(entry.id) {
+            if nextSelections.count > 1 {
+                nextSelections.removeAll { $0.id == entry.id }
+            }
+        } else {
+            nextSelections.append(entry)
+        }
+
+        nextSelections.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        BlocklistSyncService.updateSelectedBlocklists(to: nextSelections)
+        applySelections(nextSelections.map(StoredBlocklistSelection.init(entry:)))
+        await updateSignatureStatus(for: nextSelections.map(StoredBlocklistSelection.init(entry:)))
 
         do {
-            let shouldExcludeContacts = contactsPermissionState == .authorized
+            let shouldExcludeContacts = contactsPermissionState == .authorized || contactsPermissionState == .limited
             let contactNumbers = if shouldExcludeContacts {
                 await ContactFilteringService.loadSnapshot().phoneNumbers
             } else {
@@ -125,7 +169,7 @@ final class SpamBlockerModel {
             }
 
             try await BlocklistSyncService.refreshNow(
-                using: StoredBlocklistSelection(entry: entry),
+                using: nextSelections.map(StoredBlocklistSelection.init(entry:)),
                 excluding: contactNumbers
             )
             let snapshot = try BlocklistSyncService.fetchSnapshot()
@@ -133,7 +177,7 @@ final class SpamBlockerModel {
             try? await reloadExtension()
             extensionStatus = try await fetchExtensionStatus()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = userFacingMessage(for: error)
         }
 
         isRefreshingBlocklists = false
@@ -151,8 +195,17 @@ final class SpamBlockerModel {
                 }
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = userFacingMessage(for: error)
         }
+    }
+
+    func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else {
+            errorMessage = "Open the Settings app and review SpamSniper permissions."
+            return
+        }
+
+        UIApplication.shared.open(url)
     }
 
     private func reloadExtension() async throws {
@@ -202,29 +255,82 @@ final class SpamBlockerModel {
         blockedNumberCount = snapshot.records.count
         blocklistSource = snapshot.source
         lastSyncDescription = snapshot.syncedAt.map { Self.syncFormatter.localizedString(for: $0, relativeTo: Date()) } ?? "Not synced yet"
-        sampleEntries = Array(snapshot.records.prefix(3))
     }
 
     private func applySummary(_ summary: BlocklistDatabaseSummary, snapshot: BlocklistSnapshot) {
         blockedNumberCount = summary.totalEntries
         blocklistSource = summary.source ?? snapshot.source
         lastSyncDescription = summary.syncedAt.map { Self.syncFormatter.localizedString(for: $0, relativeTo: Date()) } ?? "Not synced yet"
-        sampleEntries = Array(snapshot.records.prefix(3))
     }
 
-    private func applyRepository(_ repository: BlocklistRepositoryDocument) {
+    @discardableResult
+    private func applyRepository(_ repository: BlocklistRepositoryDocument) -> [StoredBlocklistSelection] {
         availableBlocklists = repository.countries
-        if let selection = try? BlocklistSyncService.resolveSelection(in: repository) {
-            applySelection(selection)
+        if let selections = try? BlocklistSyncService.resolveSelections(in: repository) {
+            applySelections(selections)
+            return selections
         }
+
+        return []
     }
 
-    private func applySelection(_ selection: StoredBlocklistSelection) {
-        selectedBlocklistID = selection.id
-        selectedBlocklistTitle = selection.title
-        selectedBlocklistDescription = selection.description
-        selectedBlocklistCountry = "\(selection.countryName) (\(selection.countryCode))"
-        blocklistSignatureLocation = selection.resolvedSignatureURL?.absoluteString ?? "Unavailable"
+    private func applySelections(_ selections: [StoredBlocklistSelection]) {
+        selectedBlocklistIDs = Set(selections.map(\.id))
+
+        guard !selections.isEmpty else {
+            selectedBlocklistTitle = "No blocklists selected"
+            selectedBlocklistDescription = "Choose one or more blocklists to sync into the local database."
+            selectedBlocklistCountry = ""
+            blocklistSignatureStatus = "Unavailable"
+            return
+        }
+
+        if selections.count == 1, let selection = selections.first {
+            selectedBlocklistTitle = selection.title
+            selectedBlocklistDescription = selection.description
+            selectedBlocklistCountry = "\(selection.countryName) (\(selection.countryCode))"
+            blocklistSignatureStatus = selection.resolvedSignatureURL == nil ? "Unavailable" : "Checking"
+            return
+        }
+
+        let countryLabels = Array(NSOrderedSet(array: selections.map { "\($0.countryName) (\($0.countryCode))" })) as? [String] ?? []
+        selectedBlocklistTitle = "\(selections.count) Blocklists Selected"
+        selectedBlocklistDescription = selections.map(\.title).joined(separator: ", ")
+        selectedBlocklistCountry = countryLabels.joined(separator: " • ")
+        blocklistSignatureStatus = selections.contains { $0.resolvedSignatureURL != nil } ? "Checking" : "Unavailable"
+    }
+
+    private func updateSignatureStatus(for selections: [StoredBlocklistSelection]) async {
+        guard selections.contains(where: { $0.resolvedSignatureURL != nil }) else {
+            blocklistSignatureStatus = "Unavailable"
+            return
+        }
+
+        blocklistSignatureStatus = await BlocklistSyncService.signatureStatus(for: selections) ? "Good" : "Unavailable"
+    }
+
+    private func userFacingMessage(for error: Error) -> String {
+        if let syncError = error as? BlocklistSyncServiceError {
+            switch syncError {
+            case .remoteBlocklistUnavailable:
+                return "SpamSniper could not download the selected blocklists. Check your internet connection and try again."
+            case .repositoryEmpty:
+                return "No blocklists are currently available. Try again later."
+            case .bundledSeedMissing:
+                return "SpamSniper could not load its backup blocklist catalog. Reinstall the app and try again."
+            }
+        }
+
+        if contactsPermissionState == .denied {
+            return "Contacts access is turned off. Enable Contacts in Settings if you want SpamSniper to avoid blocking saved contacts."
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == CXErrorDomainCallDirectoryManager {
+            return "Turn on SpamSniper in Settings > Phone > Call Blocking & Identification to finish setup."
+        }
+
+        return "SpamSniper could not finish setup right now. Check your connection and iPhone settings, then try again."
     }
 
     private func fallbackExtensionStatus(for error: Error) -> ExtensionStatus {

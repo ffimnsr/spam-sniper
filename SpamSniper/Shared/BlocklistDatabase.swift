@@ -17,7 +17,7 @@ enum BlocklistDatabaseError: Error {
 
 struct BlocklistDatabaseSummary {
     let totalEntries: Int
-    let blocklistID: String?
+    let blocklistIDs: [String]
     let source: String?
     let syncedAt: Date?
 }
@@ -54,7 +54,7 @@ enum BlocklistDatabase {
 
     static func replaceEntries(
         _ records: [BlockedNumberRecord],
-        blocklistID: String,
+        blocklistIDs: [String],
         source: String,
         syncedAt: Date
     ) throws {
@@ -105,7 +105,10 @@ enum BlocklistDatabase {
                     }
                 }
 
-                try setMetadataValue(blocklistID, forKey: "blocklist_id", database: database)
+                try setMetadataValue(blocklistIDs.joined(separator: ","), forKey: "blocklist_ids", database: database)
+                if let firstBlocklistID = blocklistIDs.first {
+                    try setMetadataValue(firstBlocklistID, forKey: "blocklist_id", database: database)
+                }
                 try setMetadataValue(source, forKey: "source", database: database)
                 try setMetadataValue(iso8601Formatter.string(from: syncedAt), forKey: "synced_at", database: database)
                 try execute("COMMIT;", database: database)
@@ -158,7 +161,7 @@ enum BlocklistDatabase {
 
             return BlocklistSnapshot(
                 records: records,
-                blocklistID: metadataValue(forKey: "blocklist_id", database: database),
+                blocklistIDs: metadataValues(forKeys: ["blocklist_ids", "blocklist_id"], database: database),
                 source: metadataValue(forKey: "source", database: database) ?? "Unknown source",
                 syncedAt: metadataValue(forKey: "synced_at", database: database).flatMap { iso8601Formatter.date(from: $0) }
             )
@@ -183,7 +186,7 @@ enum BlocklistDatabase {
 
             return BlocklistDatabaseSummary(
                 totalEntries: totalEntries,
-                blocklistID: metadataValue(forKey: "blocklist_id", database: database),
+                blocklistIDs: metadataValues(forKeys: ["blocklist_ids", "blocklist_id"], database: database),
                 source: metadataValue(forKey: "source", database: database),
                 syncedAt: metadataValue(forKey: "synced_at", database: database).flatMap { iso8601Formatter.date(from: $0) }
             )
@@ -266,6 +269,21 @@ enum BlocklistDatabase {
         }
 
         return sqliteString(from: statement, column: 0)
+    }
+
+    private static func metadataValues(forKeys keys: [String], database: OpaquePointer?) -> [String] {
+        for key in keys {
+            guard let rawValue = metadataValue(forKey: key, database: database), !rawValue.isEmpty else {
+                continue
+            }
+
+            return rawValue
+                .split(separator: ",")
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+
+        return []
     }
 
     private static func sqliteString(from statement: OpaquePointer?, column: Int32) -> String {

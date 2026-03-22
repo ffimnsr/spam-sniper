@@ -13,6 +13,7 @@ enum SpamBlockerShared {
 
     private static let isEnabledKey = "spamBlocker.isEnabled"
     private static let selectedBlocklistKey = "spamBlocker.selectedBlocklist"
+    private static let selectedBlocklistsKey = "spamBlocker.selectedBlocklists"
     static var blockedNumbers: [Int64] {
         (try? BlocklistSyncService.fetchSnapshot().blockedNumbers) ?? []
     }
@@ -48,6 +49,40 @@ enum SpamBlockerShared {
             if let newValue, let data = try? JSONEncoder().encode(newValue) {
                 sharedDefaults.set(data, forKey: selectedBlocklistKey)
             } else {
+                sharedDefaults.removeObject(forKey: selectedBlocklistKey)
+            }
+        }
+    }
+
+    static var selectedBlocklists: [StoredBlocklistSelection] {
+        get {
+            if let data = sharedDefaults.data(forKey: selectedBlocklistsKey),
+               let selections = try? JSONDecoder().decode([StoredBlocklistSelection].self, from: data),
+               !selections.isEmpty {
+                return selections
+            }
+
+            if let legacySelection = selectedBlocklist {
+                let selections = [legacySelection]
+                self.selectedBlocklists = selections
+                return selections
+            }
+
+            return []
+        }
+        set {
+            let uniqueSelections = Array(
+                Dictionary(newValue.map { ($0.id, $0) }, uniquingKeysWith: { current, _ in current }).values
+            )
+            .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+
+            if let data = try? JSONEncoder().encode(uniqueSelections), !uniqueSelections.isEmpty {
+                sharedDefaults.set(data, forKey: selectedBlocklistsKey)
+                if let firstSelection = uniqueSelections.first, let firstData = try? JSONEncoder().encode(firstSelection) {
+                    sharedDefaults.set(firstData, forKey: selectedBlocklistKey)
+                }
+            } else {
+                sharedDefaults.removeObject(forKey: selectedBlocklistsKey)
                 sharedDefaults.removeObject(forKey: selectedBlocklistKey)
             }
         }

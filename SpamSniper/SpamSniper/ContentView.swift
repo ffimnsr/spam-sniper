@@ -1,8 +1,11 @@
+import ContactsUI
 import SwiftUI
 
 struct ContentView: View {
     @State private var model = SpamBlockerModel()
+    @State private var isContactAccessPickerPresented = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -72,10 +75,7 @@ struct ContentView: View {
         .padding(24)
         .background(
             LinearGradient(
-                colors: [
-                    Color(red: 0.06, green: 0.14, blue: 0.34),
-                    Color(red: 0.04, green: 0.44, blue: 0.55)
-                ],
+                colors: theme.heroBackground,
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             ),
@@ -109,58 +109,59 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            if model.contactsPermissionState == .notDetermined {
-                Button {
-                    Task {
-                        await model.requestContactsAccess()
-                    }
-                } label: {
-                    HStack {
-                        Text("Allow Contacts Protection")
-                        Spacer()
-                        Image(systemName: "person.crop.circle.badge.plus")
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color(red: 0.04, green: 0.46, blue: 0.54))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .background(
-                        Color(red: 0.04, green: 0.46, blue: 0.54).opacity(0.08),
-                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    )
+            Button {
+                handleContactsAction()
+            } label: {
+                HStack {
+                    Text(contactsActionTitle)
+                    Spacer()
+                    Image(systemName: contactsActionSymbol)
                 }
-                .buttonStyle(.plain)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(theme.tint)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(
+                    theme.tintSoft,
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
             }
+            .buttonStyle(.plain)
+            .modifier(
+                ContactAccessPickerModifier(
+                    isPresented: $isContactAccessPickerPresented,
+                    onComplete: {
+                        Task {
+                            await model.refresh()
+                        }
+                    }
+                )
+            )
 
-            if model.extensionStatus != .enabled {
-                Button {
-                    Task {
-                        await model.openSettings()
-                    }
-                } label: {
-                    HStack {
-                        Text("Open Call Blocking Settings")
-                        Spacer()
-                        Image(systemName: "arrow.up.right")
-                    }
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 16)
-                    .background(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.98, green: 0.45, blue: 0.19),
-                                Color(red: 0.84, green: 0.24, blue: 0.19)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    )
+            Button {
+                Task {
+                    await model.openSettings()
                 }
-                .buttonStyle(.plain)
+            } label: {
+                HStack {
+                    Text(model.extensionStatus == .enabled ? "Manage Call Blocking Settings" : "Open Call Blocking Settings")
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                }
+                .font(.headline)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .background(
+                    LinearGradient(
+                        colors: theme.warningButton,
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                )
             }
+            .buttonStyle(.plain)
         }
         .cardStyle()
     }
@@ -240,119 +241,113 @@ struct ContentView: View {
     }
 
     private var detailsCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 22) {
             Text("Blocklist Intelligence")
                 .font(.title3.weight(.semibold))
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Selected Blocklist")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                Text(model.selectedBlocklistTitle)
-                    .font(.subheadline.weight(.semibold))
-                Text(model.selectedBlocklistCountry)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Text(model.selectedBlocklistDescription)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
-            NavigationLink {
-                BlocklistSelectionView(model: model)
-            } label: {
-                HStack {
-                    Text("Choose Blocklist")
-                    Spacer()
-                    Image(systemName: "chevron.right")
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Selected Blocklists")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                    Text(model.selectedBlocklistTitle)
+                        .font(.subheadline.weight(.semibold))
+                    if !model.selectedBlocklistCountry.isEmpty {
+                        Text(model.selectedBlocklistCountry)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(model.selectedBlocklistDescription)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color(red: 0.04, green: 0.46, blue: 0.54))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(
-                    Color(red: 0.04, green: 0.46, blue: 0.54).opacity(0.08),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                )
-            }
-            .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Source")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                Text(model.blocklistSource)
+                NavigationLink {
+                    BlocklistSelectionView(model: model)
+                } label: {
+                    HStack {
+                        Text("Choose Blocklists")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
                     .font(.subheadline.weight(.semibold))
-                Text("Last synced \(model.lastSyncDescription).")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.tint)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background(
+                        theme.tintSoft,
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Signature")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                Text(model.blocklistSignatureLocation)
-                    .font(.footnote.monospaced())
-                    .textSelection(.enabled)
-            }
+            detailPanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Source")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                        Text(model.blocklistSource)
+                            .font(.subheadline.weight(.semibold))
+                        Text("Last synced \(model.lastSyncDescription).")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
 
-            if !model.sampleEntries.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Sample Entries")
-                        .font(.headline)
+                    Divider()
+                        .overlay(Color(uiColor: .separator).opacity(0.35))
 
-                    ForEach(model.sampleEntries) { entry in
+                    HStack(alignment: .center, spacing: 14) {
                         VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(entry.displayName)
-                                    .font(.subheadline.weight(.semibold))
-                                Spacer()
-                                Text(entry.confidence.uppercased())
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(Color(red: 0.84, green: 0.24, blue: 0.19))
-                            }
-
-                            Text(entry.phoneNumberE164)
-                                .font(.caption.monospaced())
+                            Text("Signature")
+                                .font(.caption.weight(.bold))
                                 .foregroundStyle(.secondary)
-
-                            Text("\(entry.category.capitalized) • \(entry.aliases.joined(separator: ", "))")
+                            Text("Blocklist signature availability")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
-                        .padding(14)
-                        .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                        Spacer(minLength: 16)
+
+                        Text(model.blocklistSignatureStatus)
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(signatureStatusColor)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(signatureStatusBackground, in: Capsule())
                     }
                 }
             }
 
-            infoRow(
-                symbol: "person.crop.circle.badge.checkmark",
-                title: "Contacts-aware filtering",
-                detail: "SpamSniper asks for Contacts access only to avoid blocking phone numbers that already exist in your address book."
-            )
+            VStack(alignment: .leading, spacing: 14) {
+                infoRow(
+                    symbol: "person.crop.circle.badge.checkmark",
+                    title: "Contacts-aware filtering",
+                    detail: "SpamSniper asks for Contacts access only to avoid blocking phone numbers that already exist in your address book."
+                )
 
-            infoRow(
-                symbol: "list.bullet.rectangle.portrait",
-                title: "Repo-driven blocklists",
-                detail: "SpamSniper reads a repo index, lets you choose a country-specific list, and imports that JSON blocklist into the shared SQLite database."
-            )
+                infoRow(
+                    symbol: "list.bullet.rectangle.portrait",
+                    title: "Repo-driven blocklists",
+                    detail: "SpamSniper reads a repo index, lets you choose a country-specific list, and imports that JSON blocklist into the shared SQLite database."
+                )
 
-            infoRow(
-                symbol: "phone.arrow.up.right",
-                title: "System-level call blocking",
-                detail: "The Call Directory extension hands those numbers to iOS so matching calls can be blocked by the system."
-            )
+                infoRow(
+                    symbol: "phone.arrow.up.right",
+                    title: "System-level call blocking",
+                    detail: "The Call Directory extension hands those numbers to iOS so matching calls can be blocked by the system."
+                )
 
-            infoRow(
-                symbol: "arrow.triangle.2.circlepath",
-                title: "Daily sync-ready",
-                detail: """
-                The app refreshes blocklist data on a daily cadence while launching or returning \
-                to the foreground, fetching the repo index first so your selected country list stays current.
-                """
-            )
+                infoRow(
+                    symbol: "arrow.triangle.2.circlepath",
+                    title: "Daily sync-ready",
+                    detail: """
+                    The app refreshes blocklist data on a daily cadence while launching or returning \
+                    to the foreground, fetching the repo index first so your selected country list stays current.
+                    """
+                )
+            }
         }
         .cardStyle()
     }
@@ -362,12 +357,12 @@ private extension View {
     func cardStyle() -> some View {
         self
             .padding(20)
-            .background(.white, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .stroke(Color.black.opacity(0.05), lineWidth: 1)
+                    .stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.06), radius: 18, x: 0, y: 10)
+            .shadow(color: Color.black.opacity(0.12), radius: 18, x: 0, y: 10)
     }
 }
 
@@ -415,10 +410,11 @@ private extension ContentView {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
                 .font(.headline)
-                .foregroundStyle(Color(red: 0.04, green: 0.46, blue: 0.54))
-                .frame(width: 24)
+                .foregroundStyle(theme.tint)
+                .frame(width: 28, height: 28)
+                .background(theme.tintSoft, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(.headline)
                 Text(detail)
@@ -426,13 +422,16 @@ private extension ContentView {
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(theme.secondarySurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     func setupRow(symbol: String, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
                 .font(.headline)
-                .foregroundStyle(Color(red: 0.84, green: 0.24, blue: 0.19))
+                .foregroundStyle(theme.warning)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -443,8 +442,9 @@ private extension ContentView {
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(Color.black.opacity(0.03), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(theme.secondarySurface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     func statusPill(title: String) -> some View {
@@ -458,10 +458,7 @@ private extension ContentView {
 
     var backgroundGradient: some View {
         LinearGradient(
-            colors: [
-                Color(red: 0.95, green: 0.97, blue: 0.99),
-                Color(red: 0.90, green: 0.95, blue: 0.96)
-            ],
+            colors: theme.pageBackground,
             startPoint: .top,
             endPoint: .bottom
         )
@@ -512,7 +509,7 @@ private extension ContentView {
 
         switch model.extensionStatus {
         case .enabled:
-            return "Calls matching the synced blocklist can be blocked by iOS."
+            return "Calls matching any synced blocklist can be blocked by iOS."
         case .disabled:
             return "Turn on the Call Blocking extension in Settings for full protection."
         case .unknown:
@@ -524,21 +521,215 @@ private extension ContentView {
 
     var buttonGradientColors: [Color] {
         if model.isBlockingEnabled {
+            return theme.primaryButton
+        }
+
+        return theme.neutralButton
+    }
+
+    var signatureStatusColor: Color {
+        switch model.blocklistSignatureStatus {
+        case "Good":
+            return .green
+        case "Checking":
+            return .secondary
+        default:
+            return theme.warning
+        }
+    }
+
+    var signatureStatusBackground: Color {
+        switch model.blocklistSignatureStatus {
+        case "Good":
+            return Color.green.opacity(colorScheme == .dark ? 0.24 : 0.12)
+        case "Checking":
+            return Color.secondary.opacity(0.14)
+        default:
+            return theme.warning.opacity(colorScheme == .dark ? 0.22 : 0.12)
+        }
+    }
+
+    func detailPanel<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(18)
+            .background(theme.secondarySurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    var contactsActionTitle: String {
+        switch model.contactsPermissionState {
+        case .notDetermined:
+            return "Allow Contacts Protection"
+        case .authorized, .limited:
+            return "Manage Shared Contacts"
+        case .denied, .restricted:
+            return "Open Contacts Settings"
+        }
+    }
+
+    var contactsActionSymbol: String {
+        switch model.contactsPermissionState {
+        case .notDetermined:
+            return "person.crop.circle.badge.plus"
+        case .authorized, .limited:
+            return "person.crop.circle.badge.checkmark"
+        case .denied, .restricted:
+            return "arrow.up.right"
+        }
+    }
+
+    func handleContactsAction() {
+        switch model.contactsPermissionState {
+        case .notDetermined:
+            Task {
+                await model.requestContactsAccess()
+            }
+        case .authorized, .limited:
+            if #available(iOS 18.0, *) {
+                isContactAccessPickerPresented = true
+            } else {
+                model.openAppSettings()
+            }
+        case .denied, .restricted:
+            model.openAppSettings()
+        }
+    }
+
+    var buttonAccentColor: Color {
+        model.isBlockingEnabled
+            ? theme.tint
+            : theme.neutralAccent
+    }
+
+    var theme: ThemePalette {
+        ThemePalette(colorScheme: colorScheme)
+    }
+}
+
+private struct ThemePalette {
+    let colorScheme: ColorScheme
+
+    var tint: Color {
+        switch colorScheme {
+        case .dark:
+            return Color(red: 0.38, green: 0.84, blue: 0.86)
+        default:
+            return Color(red: 0.04, green: 0.46, blue: 0.54)
+        }
+    }
+
+    var tintSoft: Color {
+        tint.opacity(colorScheme == .dark ? 0.22 : 0.10)
+    }
+
+    var warning: Color {
+        switch colorScheme {
+        case .dark:
+            return Color(red: 1.0, green: 0.56, blue: 0.38)
+        default:
+            return Color(red: 0.84, green: 0.24, blue: 0.19)
+        }
+    }
+
+    var heroBackground: [Color] {
+        switch colorScheme {
+        case .dark:
+            return [
+                Color(red: 0.07, green: 0.16, blue: 0.28),
+                Color(red: 0.10, green: 0.36, blue: 0.46)
+            ]
+        default:
+            return [
+                Color(red: 0.06, green: 0.14, blue: 0.34),
+                Color(red: 0.04, green: 0.44, blue: 0.55)
+            ]
+        }
+    }
+
+    var secondarySurface: Color {
+        Color(uiColor: .tertiarySystemBackground)
+    }
+
+    var pageBackground: [Color] {
+        switch colorScheme {
+        case .dark:
+            return [
+                Color(uiColor: .systemBackground),
+                Color(red: 0.06, green: 0.10, blue: 0.14)
+            ]
+        default:
+            return [
+                Color(red: 0.95, green: 0.97, blue: 0.99),
+                Color(red: 0.90, green: 0.95, blue: 0.96)
+            ]
+        }
+    }
+
+    var primaryButton: [Color] {
+        switch colorScheme {
+        case .dark:
+            return [
+                Color(red: 0.14, green: 0.56, blue: 0.62),
+                Color(red: 0.20, green: 0.72, blue: 0.76)
+            ]
+        default:
             return [
                 Color(red: 0.04, green: 0.46, blue: 0.54),
                 Color(red: 0.07, green: 0.63, blue: 0.67)
             ]
         }
-
-        return [
-            Color(red: 0.34, green: 0.39, blue: 0.45),
-            Color(red: 0.23, green: 0.27, blue: 0.33)
-        ]
     }
 
-    var buttonAccentColor: Color {
-        model.isBlockingEnabled
-            ? Color(red: 0.04, green: 0.46, blue: 0.54)
-            : Color(red: 0.23, green: 0.27, blue: 0.33)
+    var warningButton: [Color] {
+        switch colorScheme {
+        case .dark:
+            return [
+                Color(red: 0.92, green: 0.42, blue: 0.20),
+                Color(red: 0.78, green: 0.22, blue: 0.17)
+            ]
+        default:
+            return [
+                Color(red: 0.98, green: 0.45, blue: 0.19),
+                Color(red: 0.84, green: 0.24, blue: 0.19)
+            ]
+        }
+    }
+
+    var neutralButton: [Color] {
+        switch colorScheme {
+        case .dark:
+            return [
+                Color(red: 0.38, green: 0.43, blue: 0.50),
+                Color(red: 0.26, green: 0.30, blue: 0.36)
+            ]
+        default:
+            return [
+                Color(red: 0.34, green: 0.39, blue: 0.45),
+                Color(red: 0.23, green: 0.27, blue: 0.33)
+            ]
+        }
+    }
+
+    var neutralAccent: Color {
+        switch colorScheme {
+        case .dark:
+            return Color(red: 0.26, green: 0.30, blue: 0.36)
+        default:
+            return Color(red: 0.23, green: 0.27, blue: 0.33)
+        }
+    }
+}
+
+private struct ContactAccessPickerModifier: ViewModifier {
+    @Binding var isPresented: Bool
+    let onComplete: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.contactAccessPicker(isPresented: $isPresented) { _ in
+                onComplete()
+            }
+        } else {
+            content
+        }
     }
 }

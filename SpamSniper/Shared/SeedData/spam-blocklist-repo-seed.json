@@ -15,7 +15,6 @@
           "title": "Philippines Community Core",
           "description": "General scam and robocall numbers reported by PH contributors.",
           "path": "PH/community-core.json",
-          "seed_resource": "spam-blocklist-ph-community-core-seed",
           "source": "SpamSniper PH community feed"
         }
       ]
@@ -30,7 +29,6 @@
           "title": "United States Community Core",
           "description": "Common financial, delivery, and impersonation spam campaigns seen in the US.",
           "path": "US/community-core.json",
-          "seed_resource": "spam-blocklist-us-community-core-seed",
           "source": "SpamSniper US community feed"
         }
       ]
@@ -45,7 +43,6 @@
           "title": "United Kingdom Community Core",
           "description": "Banking, parcel, and HMRC-style scam calls reported by UK contributors.",
           "path": "UK/community-core.json",
-          "seed_resource": "spam-blocklist-uk-community-core-seed",
           "source": "SpamSniper UK community feed"
         }
       ]

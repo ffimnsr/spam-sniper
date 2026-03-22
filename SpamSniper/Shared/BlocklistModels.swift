@@ -78,7 +78,7 @@ struct BlockedNumberRecord: Identifiable, Equatable {
 
 struct BlocklistSnapshot {
     let records: [BlockedNumberRecord]
-    let blocklistID: String?
+    let blocklistIDs: [String]
     let source: String
     let syncedAt: Date?
 
@@ -126,7 +126,6 @@ struct BlocklistRepositoryEntry: Codable, Identifiable, Equatable {
     let title: String
     let description: String
     let path: String
-    let seedResource: String
     let source: String
     let signatureURL: String?
 
@@ -135,7 +134,6 @@ struct BlocklistRepositoryEntry: Codable, Identifiable, Equatable {
         case title
         case description
         case path
-        case seedResource = "seed_resource"
         case source
         case signatureURL = "signature_url"
     }
@@ -149,7 +147,6 @@ struct BlocklistCatalogEntry: Identifiable, Equatable {
     let description: String
     let source: String
     let documentURL: URL?
-    let seedResource: String
     let signatureURL: URL?
 }
 
@@ -161,7 +158,6 @@ struct StoredBlocklistSelection: Codable, Equatable {
     let description: String
     let source: String
     let documentURL: String?
-    let seedResource: String
     let signatureURL: String?
 }
 
@@ -177,7 +173,6 @@ extension BlocklistRepositoryDocument {
                     description: blocklist.description,
                     source: blocklist.source,
                     documentURL: repositoryURL?.deletingLastPathComponent().appending(path: blocklist.path),
-                    seedResource: blocklist.seedResource,
                     signatureURL: resolveSignatureURL(
                         blocklistSignature: blocklist.signatureURL,
                         countrySignature: country.signatureURL,
@@ -207,7 +202,7 @@ extension BlocklistRepositoryDocument {
 }
 
 extension StoredBlocklistSelection {
-    init(entry: BlocklistCatalogEntry) {
+    nonisolated init(entry: BlocklistCatalogEntry) {
         self.init(
             id: entry.id,
             countryCode: entry.countryCode,
@@ -216,7 +211,6 @@ extension StoredBlocklistSelection {
             description: entry.description,
             source: entry.source,
             documentURL: entry.documentURL?.absoluteString,
-            seedResource: entry.seedResource,
             signatureURL: entry.signatureURL?.absoluteString
         )
     }

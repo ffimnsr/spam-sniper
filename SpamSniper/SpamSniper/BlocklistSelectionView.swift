@@ -2,19 +2,22 @@ import SwiftUI
 
 struct BlocklistSelectionView: View {
     @Bindable var model: SpamBlockerModel
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Active Blocklist")
+                    Text("Selected Blocklists")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
                     Text(model.selectedBlocklistTitle)
                         .font(.headline)
-                    Text(model.selectedBlocklistCountry)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    if !model.selectedBlocklistCountry.isEmpty {
+                        Text(model.selectedBlocklistCountry)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                     Text(model.selectedBlocklistDescription)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -27,7 +30,7 @@ struct BlocklistSelectionView: View {
                     ForEach(country.blocklists, id: \.id) { entry in
                         Button {
                             Task {
-                                await model.selectBlocklist(catalogEntry(for: entry, country: country))
+                                await model.toggleBlocklistSelection(catalogEntry(for: entry, country: country))
                             }
                         } label: {
                             HStack(alignment: .top, spacing: 12) {
@@ -45,10 +48,10 @@ struct BlocklistSelectionView: View {
 
                                 Spacer()
 
-                                Image(systemName: model.selectedBlocklistID == entry.id ? "checkmark.circle.fill" : "circle")
+                                Image(systemName: model.selectedBlocklistIDs.contains(entry.id) ? "checkmark.circle.fill" : "circle")
                                     .foregroundStyle(
-                                        model.selectedBlocklistID == entry.id
-                                            ? Color(red: 0.04, green: 0.46, blue: 0.54)
+                                        model.selectedBlocklistIDs.contains(entry.id)
+                                            ? selectionTint
                                             : .secondary
                                     )
                             }
@@ -60,7 +63,7 @@ struct BlocklistSelectionView: View {
                 }
             }
         }
-        .navigationTitle("Choose Blocklist")
+        .navigationTitle("Choose Blocklists")
         .overlay {
             if model.isRefreshingBlocklists {
                 ProgressView("Updating blocklist")
@@ -101,9 +104,17 @@ struct BlocklistSelectionView: View {
             description: entry.description,
             source: entry.source,
             documentURL: documentURL,
-            seedResource: entry.seedResource,
             signatureURL: signatureURL
         )
+    }
+
+    private var selectionTint: Color {
+        switch colorScheme {
+        case .dark:
+            return Color(red: 0.38, green: 0.84, blue: 0.86)
+        default:
+            return Color(red: 0.04, green: 0.46, blue: 0.54)
+        }
     }
 }
 

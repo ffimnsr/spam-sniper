@@ -366,6 +366,7 @@
 				CODE_SIGN_ENTITLEMENTS = SpamSniper/SpamSniper.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KU453RW22;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSContactsUsageDescription = "SpamSniper checks your contacts so it does not block phone numbers that already belong to people you know.";
@@ -400,6 +401,7 @@
 				CODE_SIGN_ENTITLEMENTS = SpamSniper/SpamSniper.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KU453RW22;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSContactsUsageDescription = "SpamSniper checks your contacts so it does not block phone numbers that already belong to people you know.";
@@ -433,6 +435,7 @@
 				CODE_SIGN_ENTITLEMENTS = SpamSniperCallBlocker/SpamSniperCallBlocker.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KU453RW22;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SpamSniperCallBlocker/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
@@ -462,6 +465,7 @@
 				CODE_SIGN_ENTITLEMENTS = SpamSniperCallBlocker/SpamSniperCallBlocker.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9KU453RW22;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SpamSniperCallBlocker/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;

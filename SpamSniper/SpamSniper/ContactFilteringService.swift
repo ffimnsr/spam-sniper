@@ -11,6 +11,7 @@ import Foundation
 struct ContactFilterSnapshot {
     enum PermissionState {
         case authorized
+        case limited
         case denied
         case restricted
         case notDetermined
@@ -18,7 +19,9 @@ struct ContactFilterSnapshot {
         var description: String {
             switch self {
             case .authorized:
-                return "Contacts are checked so known people are excluded from blocking."
+                return "All contacts are checked so known people are excluded from blocking."
+            case .limited:
+                return "Only selected contacts are checked so saved people can be excluded from blocking."
             case .denied:
                 return "Contacts access is off, so SpamSniper cannot skip numbers saved in your address book."
             case .restricted:
@@ -53,7 +56,7 @@ enum ContactFilteringService {
         let state = currentPermissionState()
         let store = CNContactStore()
 
-        guard state == .authorized else {
+        guard state == .authorized || state == .limited else {
             return ContactFilterSnapshot(state: state, phoneNumbers: [])
         }
 
@@ -81,9 +84,9 @@ enum ContactFilteringService {
 
         switch phoneNumbersResult {
         case .success(let numbers):
-            return ContactFilterSnapshot(state: .authorized, phoneNumbers: numbers)
+            return ContactFilterSnapshot(state: state, phoneNumbers: numbers)
         case .failure:
-            return ContactFilterSnapshot(state: .authorized, phoneNumbers: [])
+            return ContactFilterSnapshot(state: state, phoneNumbers: [])
         }
     }
 
@@ -97,8 +100,10 @@ enum ContactFilteringService {
 
     private static func permissionState(for status: CNAuthorizationStatus) -> ContactFilterSnapshot.PermissionState {
         switch status {
-        case .authorized, .limited:
+        case .authorized:
             return .authorized
+        case .limited:
+            return .limited
         case .denied:
             return .denied
         case .restricted:
