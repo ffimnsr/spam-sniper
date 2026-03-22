@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-03-20T00:00:00Z",
+  "generated_at": "2026-03-22T13:38:20Z",
   "name": "SpamSniper Bundled Blocklist Repo",
   "gpg_key_url": "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklist/keys/community-signing-key.asc",
   "default_blocklist_id": "PH/community-core",
@@ -8,13 +8,14 @@
     {
       "code": "PH",
       "name": "Philippines",
-      "signature_url": "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklist/keys/community-signing-key.asc",
+      "signature_url": "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklist/PH/community-core.json.asc",
       "blocklists": [
         {
           "id": "PH/community-core",
           "title": "Philippines Community Core",
           "description": "General scam and robocall numbers reported by PH contributors.",
           "path": "PH/community-core.json",
+          "signature_url": "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklist/PH/community-core.json.asc",
           "source": "SpamSniper PH community feed"
         }
       ]
@@ -22,13 +23,14 @@
     {
       "code": "US",
       "name": "United States",
-      "signature_url": "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklist/keys/community-signing-key.asc",
+      "signature_url": "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklist/US/community-core.json.asc",
       "blocklists": [
         {
           "id": "US/community-core",
           "title": "United States Community Core",
           "description": "Common financial, delivery, and impersonation spam campaigns seen in the US.",
           "path": "US/community-core.json",
+          "signature_url": "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklist/US/community-core.json.asc",
           "source": "SpamSniper US community feed"
         }
       ]
@@ -36,13 +38,14 @@
     {
       "code": "UK",
       "name": "United Kingdom",
-      "signature_url": "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklist/keys/community-signing-key.asc",
+      "signature_url": "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklist/UK/community-core.json.asc",
       "blocklists": [
         {
           "id": "UK/community-core",
           "title": "United Kingdom Community Core",
           "description": "Banking, parcel, and HMRC-style scam calls reported by UK contributors.",
           "path": "UK/community-core.json",
+          "signature_url": "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklist/UK/community-core.json.asc",
           "source": "SpamSniper UK community feed"
         }
       ]

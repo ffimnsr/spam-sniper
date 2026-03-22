@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-03-20T00:00:00Z",
+  "generated_at": "2026-03-22T13:38:20Z",
   "name": "SpamSniper Community Blocklist Repo",
   "gpg_key_url": "keys/community-signing-key.asc",
   "default_blocklist_id": "PH/community-core",
@@ -8,13 +8,14 @@
     {
       "code": "PH",
       "name": "Philippines",
-      "signature_url": "keys/community-signing-key.asc",
+      "signature_url": "PH/community-core.json.asc",
       "blocklists": [
         {
           "id": "PH/community-core",
           "title": "Philippines Community Core",
           "description": "General scam and robocall numbers reported by PH contributors.",
           "path": "PH/community-core.json",
+          "signature_url": "PH/community-core.json.asc",
           "seed_resource": "spam-blocklist-ph-community-core-seed",
           "source": "SpamSniper PH community feed"
         }
@@ -23,13 +24,14 @@
     {
       "code": "US",
       "name": "United States",
-      "signature_url": "keys/community-signing-key.asc",
+      "signature_url": "US/community-core.json.asc",
       "blocklists": [
         {
           "id": "US/community-core",
           "title": "United States Community Core",
           "description": "Common financial, delivery, and impersonation spam campaigns seen in the US.",
           "path": "US/community-core.json",
+          "signature_url": "US/community-core.json.asc",
           "seed_resource": "spam-blocklist-us-community-core-seed",
           "source": "SpamSniper US community feed"
         }
@@ -38,13 +40,14 @@
     {
       "code": "UK",
       "name": "United Kingdom",
-      "signature_url": "keys/community-signing-key.asc",
+      "signature_url": "UK/community-core.json.asc",
       "blocklists": [
         {
           "id": "UK/community-core",
           "title": "United Kingdom Community Core",
           "description": "Banking, parcel, and HMRC-style scam calls reported by UK contributors.",
           "path": "UK/community-core.json",
+          "signature_url": "UK/community-core.json.asc",
           "seed_resource": "spam-blocklist-uk-community-core-seed",
           "source": "SpamSniper UK community feed"
         }

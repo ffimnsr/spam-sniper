@@ -11,6 +11,10 @@ enum BlocklistSyncServiceError: LocalizedError {
     case bundledSeedMissing(String)
     case repositoryEmpty
     case remoteBlocklistUnavailable(String)
+    case repositorySignatureUnavailable
+    case repositorySignatureInvalid
+    case blocklistSignatureUnavailable(String)
+    case blocklistSignatureInvalid(String)
 
     var errorDescription: String? {
         switch self {
@@ -25,19 +29,38 @@ enum BlocklistSyncServiceError: LocalizedError {
             return """
             SpamSniper could not download the blocklist "\(title)". Connect to the internet and try syncing again.
             """
+        case .repositorySignatureUnavailable:
+            return "The blocklist repository signature is missing."
+        case .repositorySignatureInvalid:
+            return "The blocklist repository signature is invalid."
+        case let .blocklistSignatureUnavailable(title):
+            return "The blocklist signature for \"\(title)\" is missing."
+        case let .blocklistSignatureInvalid(title):
+            return "The blocklist signature for \"\(title)\" is invalid."
         }
     }
 }
 
 enum BlocklistSyncService {
     static func signatureStatus(for selections: [StoredBlocklistSelection]) async -> Bool {
-        let signatureURLs = Array(Set(selections.compactMap(\.resolvedSignatureURL)))
-        guard !signatureURLs.isEmpty else {
+        guard !selections.isEmpty else {
             return false
         }
 
-        for url in signatureURLs {
-            if await !isReachable(url: url) {
+        for selection in selections {
+            guard let documentURL = selection.resolvedDocumentURL,
+                  let signatureURL = selection.resolvedSignatureURL else {
+                return false
+            }
+
+            do {
+                let documentData = try await fetchRemoteData(from: documentURL)
+                let signatureData = try await fetchRemoteData(from: signatureURL)
+                try BlocklistSignatureVerifier.verifyDetachedSignature(
+                    signedData: documentData,
+                    signatureData: signatureData
+                )
+            } catch {
                 return false
             }
         }
@@ -74,7 +97,8 @@ enum BlocklistSyncService {
             let document = try await loadDocument(for: selection)
             sourceLabels.append(document.source)
 
-            for record in document.entries.compactMap(BlockedNumberRecord.from(document:)) where !contactNumbers.contains(record.phoneNumber) {
+            for record in document.entries.compactMap(BlockedNumberRecord.from(document:))
+            where !contactNumbers.contains(record.phoneNumber) {
                 deduplicatedRecords[record.phoneNumber] = record
             }
         }
@@ -96,12 +120,20 @@ enum BlocklistSyncService {
     static func fetchRepository() async throws -> BlocklistRepositoryDocument {
         if let repositoryURL {
             do {
-                let (data, response) = try await session.data(from: repositoryURL)
-                guard let httpResponse = response as? HTTPURLResponse,
-                      200..<300 ~= httpResponse.statusCode else {
-                    throw URLError(.badServerResponse)
-                }
+                let data = try await fetchRemoteData(from: repositoryURL)
+                let signatureData = try await fetchRemoteData(from: repositoryURL.appendingPathExtension("asc"))
+                try BlocklistSignatureVerifier.verifyDetachedSignature(signedData: data, signatureData: signatureData)
                 return try decoder.decode(BlocklistRepositoryDocument.self, from: data)
+            } catch let error as BlocklistSyncServiceError {
+                switch error {
+                case .repositorySignatureUnavailable, .repositorySignatureInvalid:
+                    throw error
+                default:
+                    return try loadSeedRepository()
+                }
+            } catch let error as BlocklistSignatureVerifierError {
+                _ = error
+                throw BlocklistSyncServiceError.repositorySignatureInvalid
             } catch {
                 return try loadSeedRepository()
             }
@@ -153,12 +185,19 @@ enum BlocklistSyncService {
     private static func loadDocument(for selection: StoredBlocklistSelection) async throws -> BlocklistDocument {
         if let remoteURL = selection.resolvedDocumentURL {
             do {
-                let (data, response) = try await session.data(from: remoteURL)
-                guard let httpResponse = response as? HTTPURLResponse,
-                      200..<300 ~= httpResponse.statusCode else {
-                    throw URLError(.badServerResponse)
+                let data = try await fetchRemoteData(from: remoteURL)
+                guard let signatureURL = selection.resolvedSignatureURL else {
+                    throw BlocklistSyncServiceError.blocklistSignatureUnavailable(selection.title)
                 }
+
+                let signatureData = try await fetchRemoteData(from: signatureURL)
+                try BlocklistSignatureVerifier.verifyDetachedSignature(signedData: data, signatureData: signatureData)
                 return try decoder.decode(BlocklistDocument.self, from: data)
+            } catch let error as BlocklistSyncServiceError {
+                throw error
+            } catch let error as BlocklistSignatureVerifierError {
+                _ = error
+                throw BlocklistSyncServiceError.blocklistSignatureInvalid(selection.title)
             } catch {
                 throw BlocklistSyncServiceError.remoteBlocklistUnavailable(selection.title)
             }
@@ -169,18 +208,24 @@ enum BlocklistSyncService {
 
     private static func loadSeedRepository() throws -> BlocklistRepositoryDocument {
         let data = try loadBundledData(resourceName: "spam-blocklist-repo-seed")
+        let signatureData = try loadBundledData(resourceName: "spam-blocklist-repo-seed", withExtension: "asc")
+        try BlocklistSignatureVerifier.verifyDetachedSignature(signedData: data, signatureData: signatureData)
         return try decoder.decode(BlocklistRepositoryDocument.self, from: data)
     }
 
     private static func loadBundledData(resourceName: String) throws -> Data {
+        try loadBundledData(resourceName: resourceName, withExtension: "json")
+    }
+
+    private static func loadBundledData(resourceName: String, withExtension fileExtension: String) throws -> Data {
         let bundles = [Bundle.main] + Bundle.allBundles + Bundle.allFrameworks
         for bundle in bundles {
-            if let url = bundle.url(forResource: resourceName, withExtension: "json") {
+            if let url = bundle.url(forResource: resourceName, withExtension: fileExtension) {
                 return try Data(contentsOf: url)
             }
         }
 
-        throw BlocklistSyncServiceError.bundledSeedMissing(resourceName)
+        throw BlocklistSyncServiceError.bundledSeedMissing("\(resourceName).\(fileExtension)")
     }
 
     private static func firstAvailableEntry(
@@ -217,25 +262,22 @@ enum BlocklistSyncService {
         return URLSession(configuration: configuration)
     }()
 
-    private static func isReachable(url: URL) async -> Bool {
-        var request = URLRequest(url: url)
-        request.httpMethod = "HEAD"
+    private static func fetchRemoteData(from url: URL) async throws -> Data {
+        let (data, response) = try await session.data(from: url)
+        guard let httpResponse = response as? HTTPURLResponse,
+              200..<300 ~= httpResponse.statusCode else {
+            if url.pathExtension == "asc" {
+                if url.lastPathComponent == "repo.json.asc" {
+                    throw BlocklistSyncServiceError.repositorySignatureUnavailable
+                }
 
-        do {
-            let (_, response) = try await session.data(for: request)
-            if let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode {
-                return true
+                throw BlocklistSyncServiceError.blocklistSignatureUnavailable(url.deletingPathExtension().lastPathComponent)
             }
-        } catch {}
 
-        do {
-            let (_, response) = try await session.data(from: url)
-            if let httpResponse = response as? HTTPURLResponse {
-                return 200..<300 ~= httpResponse.statusCode
-            }
-        } catch {}
+            throw URLError(.badServerResponse)
+        }
 
-        return false
+        return data
     }
 
     static let repositoryURL = URL(
