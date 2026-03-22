@@ -2,6 +2,8 @@
 
 SpamSniper is an iPhone call-blocking app that syncs curated spam blocklists, stores them in a shared local database, and feeds them into an iOS Call Directory extension for system-level blocking. It is designed to stay lightweight, repo-driven, and practical: choose blocklists, sync them locally, and let iOS handle matching calls.
 
+![SpamSniper app preview](assets/spamsniper-preview.png)
+
 ## Features
 
 - Syncs spam blocklists from a repository-backed catalog.
