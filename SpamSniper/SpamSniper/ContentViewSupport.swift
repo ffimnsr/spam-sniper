@@ -242,6 +242,40 @@ extension ContentView {
         )
     }
 
+    var aboutEntryCard: some View {
+        NavigationLink {
+            AboutView()
+        } label: {
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: "info.circle.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(theme.tint)
+                    .frame(width: 42, height: 42)
+                    .background(theme.tintSoft, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("About SpamSniper")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text("App details, license, and third-party license information.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background(theme.secondarySurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(Color(uiColor: .separator).opacity(0.25), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     func statCard(title: String, value: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title.uppercased())

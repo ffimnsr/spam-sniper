@@ -19,6 +19,8 @@ struct ContentView: View {
                     if let errorMessage = model.errorMessage {
                         errorCard(message: errorMessage)
                     }
+
+                    aboutEntryCard
                 }
                 .padding(20)
                 .padding(.bottom, 104)
