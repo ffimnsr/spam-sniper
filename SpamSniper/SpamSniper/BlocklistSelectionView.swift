@@ -48,7 +48,11 @@ struct BlocklistSelectionView: View {
 
                                 Spacer()
 
-                                Image(systemName: model.selectedBlocklistIDs.contains(entry.id) ? "checkmark.circle.fill" : "circle")
+                                Image(
+                                    systemName: model.selectedBlocklistIDs.contains(entry.id)
+                                        ? "checkmark.circle.fill"
+                                        : "circle"
+                                )
                                     .foregroundStyle(
                                         model.selectedBlocklistIDs.contains(entry.id)
                                             ? selectionTint

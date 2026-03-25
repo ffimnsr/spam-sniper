@@ -1,4 +1,3 @@
-import ContactsUI
 import SwiftUI
 
 struct ContentView: View {

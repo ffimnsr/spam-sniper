@@ -22,6 +22,11 @@ struct BlocklistDatabaseSummary {
     let syncedAt: Date?
 }
 
+struct BlocklistSearchResponse {
+    let queryDigits: String
+    let results: [BlockedNumberSearchResult]
+}
+
 enum BlocklistDatabase {
     static func initializeIfNeeded() throws {
         try withDatabase { database in
@@ -142,8 +147,14 @@ enum BlocklistDatabase {
                 let displayName = sqliteString(from: statement, column: 1)
                 let category = sqliteString(from: statement, column: 2)
                 let confidence = sqliteString(from: statement, column: 3)
-                let aliases = try decoder.decode([String].self, from: Data(sqliteString(from: statement, column: 4).utf8))
-                let tags = try decoder.decode([String].self, from: Data(sqliteString(from: statement, column: 5).utf8))
+                let aliases = try decoder.decode(
+                    [String].self,
+                    from: Data(sqliteString(from: statement, column: 4).utf8)
+                )
+                let tags = try decoder.decode(
+                    [String].self,
+                    from: Data(sqliteString(from: statement, column: 5).utf8)
+                )
                 let notes = sqliteString(from: statement, column: 6)
 
                 records.append(
@@ -163,7 +174,8 @@ enum BlocklistDatabase {
                 records: records,
                 blocklistIDs: metadataValues(forKeys: ["blocklist_ids", "blocklist_id"], database: database),
                 source: metadataValue(forKey: "source", database: database) ?? "Unknown source",
-                syncedAt: metadataValue(forKey: "synced_at", database: database).flatMap { iso8601Formatter.date(from: $0) }
+                syncedAt: metadataValue(forKey: "synced_at", database: database)
+                    .flatMap { iso8601Formatter.date(from: $0) }
             )
         }
     }
@@ -188,130 +200,33 @@ enum BlocklistDatabase {
                 totalEntries: totalEntries,
                 blocklistIDs: metadataValues(forKeys: ["blocklist_ids", "blocklist_id"], database: database),
                 source: metadataValue(forKey: "source", database: database),
-                syncedAt: metadataValue(forKey: "synced_at", database: database).flatMap { iso8601Formatter.date(from: $0) }
+                syncedAt: metadataValue(forKey: "synced_at", database: database)
+                    .flatMap { iso8601Formatter.date(from: $0) }
             )
         }
     }
 
-    private static func withDatabase<T>(_ operation: (OpaquePointer?) throws -> T) throws -> T {
-        try initializeFileSystemIfNeeded()
-        let url = try databaseURL
-
-        var database: OpaquePointer?
-        let flags = SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX
-        guard sqlite3_open_v2(url.path, &database, flags, nil) == SQLITE_OK else {
-            throw BlocklistDatabaseError.openDatabaseFailed
-        }
-        defer { sqlite3_close(database) }
-
-        try execute("PRAGMA journal_mode=WAL;", database: database)
-        try execute("PRAGMA synchronous=NORMAL;", database: database)
-
-        return try operation(database)
-    }
-
-    private static func initializeFileSystemIfNeeded() throws {
-        let directoryURL = try databaseURL.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-    }
-
-    private static var databaseURL: URL {
-        get throws {
-            guard let containerURL = FileManager.default.containerURL(
-                forSecurityApplicationGroupIdentifier: SpamBlockerShared.appGroupIdentifier
-            ) else {
-                throw BlocklistDatabaseError.sharedContainerUnavailable
-            }
-
-            return containerURL.appendingPathComponent("Database/spam-sniper.sqlite")
-        }
-    }
-
-    private static func execute(_ sql: String, database: OpaquePointer?) throws {
-        guard sqlite3_exec(database, sql, nil, nil, nil) == SQLITE_OK else {
-            throw BlocklistDatabaseError.executionFailed(lastErrorMessage(from: database))
-        }
-    }
-
-    private static func setMetadataValue(_ value: String, forKey key: String, database: OpaquePointer?) throws {
-        let sql =
-        """
-        INSERT INTO metadata(key, value)
-        VALUES(?, ?)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value;
-        """
-
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
-            throw BlocklistDatabaseError.prepareFailed(lastErrorMessage(from: database))
-        }
-        defer { sqlite3_finalize(statement) }
-
-        sqlite3_bind_text(statement, 1, key, -1, transientDestructor)
-        sqlite3_bind_text(statement, 2, value, -1, transientDestructor)
-
-        guard sqlite3_step(statement) == SQLITE_DONE else {
-            throw BlocklistDatabaseError.executionFailed(lastErrorMessage(from: database))
-        }
-    }
-
-    private static func metadataValue(forKey key: String, database: OpaquePointer?) -> String? {
-        let sql = "SELECT value FROM metadata WHERE key = ? LIMIT 1;"
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
-            return nil
-        }
-        defer { sqlite3_finalize(statement) }
-
-        sqlite3_bind_text(statement, 1, key, -1, transientDestructor)
-        guard sqlite3_step(statement) == SQLITE_ROW else {
-            return nil
+    static func searchNumbers(matching rawQuery: String, limit: Int = 100) throws -> BlocklistSearchResponse {
+        let queryDigits = BlockedNumberRecord.normalizedDigits(from: rawQuery)
+        guard !queryDigits.isEmpty else {
+            return BlocklistSearchResponse(queryDigits: "", results: [])
         }
 
-        return sqliteString(from: statement, column: 0)
-    }
+        return try withDatabase { database in
+            let statement = try preparedSearchStatement(
+                for: queryDigits,
+                limit: limit,
+                database: database
+            )
+            defer { sqlite3_finalize(statement) }
 
-    private static func metadataValues(forKeys keys: [String], database: OpaquePointer?) -> [String] {
-        for key in keys {
-            guard let rawValue = metadataValue(forKey: key, database: database), !rawValue.isEmpty else {
-                continue
-            }
-
-            return rawValue
-                .split(separator: ",")
-                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
+            return BlocklistSearchResponse(
+                queryDigits: queryDigits,
+                results: try searchResults(
+                    from: statement,
+                    queryDigits: queryDigits
+                )
+            )
         }
-
-        return []
-    }
-
-    private static func sqliteString(from statement: OpaquePointer?, column: Int32) -> String {
-        guard let raw = sqlite3_column_text(statement, column) else {
-            return ""
-        }
-
-        return String(cString: raw)
-    }
-
-    private static func lastErrorMessage(from database: OpaquePointer?) -> String {
-        guard let database else {
-            return "Unknown SQLite error"
-        }
-
-        return String(cString: sqlite3_errmsg(database))
-    }
-
-    private static let transientDestructor = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-    private static let iso8601Formatter = ISO8601DateFormatter()
-}
-
-private extension Optional {
-    func unwrap() throws -> Wrapped {
-        guard let self else {
-            throw BlocklistDatabaseError.executionFailed("Unexpected nil while encoding blocklist data")
-        }
-
-        return self
     }
 }

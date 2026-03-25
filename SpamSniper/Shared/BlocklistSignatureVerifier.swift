@@ -23,7 +23,21 @@ enum BlocklistSignatureVerifierError: LocalizedError {
 enum BlocklistSignatureVerifier {
     static func verifyDetachedSignature(signedData: Data, signatureData: Data) throws {
         let keys = try readTrustedKeys()
+        try verifyDetachedSignature(signedData: signedData, signatureData: signatureData, using: keys)
+    }
 
+    static func verifyDetachedSignature(signedData: Data, signatureData: Data, publicKeyData: Data) throws {
+        let keys: [Key]
+        do {
+            keys = try ObjectivePGP.readKeys(from: publicKeyData)
+        } catch {
+            throw BlocklistSignatureVerifierError.invalidSignature
+        }
+
+        try verifyDetachedSignature(signedData: signedData, signatureData: signatureData, using: keys)
+    }
+
+    private static func verifyDetachedSignature(signedData: Data, signatureData: Data, using keys: [Key]) throws {
         do {
             try ObjectivePGP.verify(signedData, withSignature: signatureData, using: keys)
         } catch {

@@ -21,7 +21,9 @@ struct AboutView: View {
                     .font(.body)
                 Text("ObjectivePGP is licensed separately and is not covered by SpamSniper's MIT License.")
                     .font(.body)
-                Text("Review the upstream ObjectivePGP LICENSE.txt and LICENSE-third-party.txt files for the full terms.")
+                Text(
+                    "Review the upstream ObjectivePGP LICENSE.txt and LICENSE-third-party.txt files for the full terms."
+                )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

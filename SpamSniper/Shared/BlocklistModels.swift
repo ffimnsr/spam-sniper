@@ -7,23 +7,17 @@
 
 import Foundation
 
-struct BlocklistDocument: Codable {
-    let version: Int
-    let generatedAt: String
+struct BlocklistDocument: Decodable {
     let source: String
-    let notes: [String]
     let entries: [BlocklistEntryDocument]
 
     enum CodingKeys: String, CodingKey {
-        case version
-        case generatedAt = "generated_at"
         case source
-        case notes
         case entries
     }
 }
 
-struct BlocklistEntryDocument: Codable {
+struct BlocklistEntryDocument: Decodable {
     let phoneNumberE164: String
     let displayName: String
     let category: String
@@ -58,6 +52,10 @@ struct BlockedNumberRecord: Identifiable, Equatable {
         "+\(phoneNumber)"
     }
 
+    var normalizedDigits: String {
+        Self.normalizedDigits(from: phoneNumberE164)
+    }
+
     nonisolated static func from(document: BlocklistEntryDocument) -> BlockedNumberRecord? {
         let digits = document.phoneNumberE164.filter(\.isNumber)
         guard let phoneNumber = Int64(digits), phoneNumber > 0 else {
@@ -74,6 +72,24 @@ struct BlockedNumberRecord: Identifiable, Equatable {
             notes: document.notes
         )
     }
+
+    nonisolated static func normalizedDigits(from rawValue: String) -> String {
+        rawValue.filter(\.isNumber)
+    }
+}
+
+struct BlockedNumberSearchResult: Identifiable, Equatable {
+    let record: BlockedNumberRecord
+    let matchedDigits: String
+    let matchKind: MatchKind
+
+    var id: Int64 { record.id }
+
+    enum MatchKind: String, Equatable {
+        case exact
+        case suffix
+        case contains
+    }
 }
 
 struct BlocklistSnapshot {
@@ -82,22 +98,19 @@ struct BlocklistSnapshot {
     let source: String
     let syncedAt: Date?
 
+    // swiftlint:disable:next unused_declaration
     var blockedNumbers: [Int64] {
         records.map(\.phoneNumber).sorted()
     }
 }
 
-struct BlocklistRepositoryDocument: Codable {
-    let version: Int
-    let generatedAt: String
+struct BlocklistRepositoryDocument: Decodable {
     let name: String
     let gpgKeyURL: String?
     let defaultBlocklistID: String?
     let countries: [BlocklistRepositoryCountry]
 
     enum CodingKeys: String, CodingKey {
-        case version
-        case generatedAt = "generated_at"
         case name
         case gpgKeyURL = "gpg_key_url"
         case defaultBlocklistID = "default_blocklist_id"
@@ -105,7 +118,7 @@ struct BlocklistRepositoryDocument: Codable {
     }
 }
 
-struct BlocklistRepositoryCountry: Codable, Identifiable, Equatable {
+struct BlocklistRepositoryCountry: Decodable, Identifiable, Equatable {
     let code: String
     let name: String
     let signatureURL: String?
@@ -121,7 +134,7 @@ struct BlocklistRepositoryCountry: Codable, Identifiable, Equatable {
     }
 }
 
-struct BlocklistRepositoryEntry: Codable, Identifiable, Equatable {
+struct BlocklistRepositoryEntry: Decodable, Identifiable, Equatable {
     let id: String
     let title: String
     let description: String
@@ -156,7 +169,6 @@ struct StoredBlocklistSelection: Codable, Equatable {
     let countryName: String
     let title: String
     let description: String
-    let source: String
     let documentURL: String?
     let signatureURL: String?
 }
@@ -201,6 +213,63 @@ extension BlocklistRepositoryDocument {
     }
 }
 
+// MARK: - Stored Repository
+
+struct StoredRepository: Codable, Identifiable, Equatable {
+    /// Stable identifier – the normalised URL string (never changes for a given entry).
+    let id: String
+    /// The repo.json URL (may be updated by the user).
+    var urlString: String
+    /// Name sourced from repo metadata at validation time.
+    var name: String
+    /// Optional user-supplied override label. When set this is what the UI shows.
+    var customName: String
+    /// `true` for the read-only built-in community repo entry.
+    let isBuiltIn: Bool
+
+    /// The label that should be displayed in the UI.
+    var displayName: String {
+        let label = customName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return label.isEmpty ? name : label
+    }
+
+    var resolvedURL: URL? { URL(string: urlString) }
+
+    /// Returns a copy with updated fields; `id` is always preserved.
+    func updating(urlString: String? = nil, name: String? = nil, customName: String? = nil) -> StoredRepository {
+        StoredRepository(
+            id: id,
+            urlString: urlString ?? self.urlString,
+            name: name ?? self.name,
+            customName: customName ?? self.customName,
+            isBuiltIn: isBuiltIn
+        )
+    }
+}
+
+extension StoredRepository {
+    static let builtIn = StoredRepository(
+        id: "builtin",
+        urlString: "https://raw.githubusercontent.com/ffimnsr/spam-sniper/master/blocklist/repo.json",
+        name: "Built-in Community Repo",
+        customName: "",
+        isBuiltIn: true
+    )
+
+    /// Convenience init used when saving a newly validated repo.
+    init(validatedURL: URL, repoName: String) {
+        self.init(
+            id: validatedURL.absoluteString,
+            urlString: validatedURL.absoluteString,
+            name: repoName,
+            customName: "",
+            isBuiltIn: false
+        )
+    }
+}
+
+// MARK: -
+
 extension StoredBlocklistSelection {
     nonisolated init(entry: BlocklistCatalogEntry) {
         self.init(
@@ -209,7 +278,6 @@ extension StoredBlocklistSelection {
             countryName: entry.countryName,
             title: entry.title,
             description: entry.description,
-            source: entry.source,
             documentURL: entry.documentURL?.absoluteString,
             signatureURL: entry.signatureURL?.absoluteString
         )

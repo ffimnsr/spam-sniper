@@ -6,7 +6,6 @@
 //
 
 import Contacts
-import Foundation
 
 struct ContactFilterSnapshot {
     enum PermissionState {

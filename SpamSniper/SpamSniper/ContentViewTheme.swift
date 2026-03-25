@@ -5,7 +5,10 @@ extension View {
     func cardStyle() -> some View {
         self
             .padding(20)
-            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .background(
+                Color(uiColor: .secondarySystemBackground),
+                in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 1)
