@@ -76,6 +76,18 @@ final class SpamBlockerModel {
     var isSearchingNumbers = false
     var numberSearchMessage: String?
 
+    // MARK: - Personal Blocklist
+
+    /// The user's personal blocklist store (iCloud-backed).
+    let personalBlocklistStore = PersonalBlocklistStore.shared
+
+    /// All personal entries; updated whenever the store changes.
+    var personalEntries: [PersonalBlocklistEntry] = PersonalBlocklistStore.shared.entries
+
+    func refreshPersonalEntries() {
+        personalEntries = personalBlocklistStore.entries
+    }
+
     func refresh() async {
         SpamBlockerShared.registerDefaults()
         isBlockingEnabled = SpamBlockerShared.isEnabled

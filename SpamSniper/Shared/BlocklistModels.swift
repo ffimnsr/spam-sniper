@@ -82,13 +82,41 @@ struct BlockedNumberSearchResult: Identifiable, Equatable {
     let record: BlockedNumberRecord
     let matchedDigits: String
     let matchKind: MatchKind
+    /// Where this result originated.
+    let source: ResultSource
+    /// Personal entry attached to this result (non-nil when source is .personal or .combined).
+    let personalEntry: PersonalBlocklistEntry?
 
     var id: Int64 { record.id }
+
+    init(
+        record: BlockedNumberRecord,
+        matchedDigits: String,
+        matchKind: MatchKind,
+        source: ResultSource = .repo,
+        personalEntry: PersonalBlocklistEntry? = nil
+    ) {
+        self.record = record
+        self.matchedDigits = matchedDigits
+        self.matchKind = matchKind
+        self.source = source
+        self.personalEntry = personalEntry
+    }
 
     enum MatchKind: String, Equatable {
         case exact
         case suffix
         case contains
+    }
+
+    /// Where the search result came from.
+    enum ResultSource: Equatable {
+        /// Found only in the synced repo database.
+        case repo
+        /// Found only in the user's personal blocklist.
+        case personal
+        /// Found in both; repo record is primary, personal entry supplemental.
+        case combined
     }
 }
 

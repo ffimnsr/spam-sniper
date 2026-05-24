@@ -22,18 +22,93 @@ extension SpamBlockerModel {
         isSearchingNumbers = true
         defer { isSearchingNumbers = false }
 
+        // --- Repo results ---
+        var repoResults: [BlockedNumberSearchResult] = []
         do {
             let response = try BlocklistDatabase.searchNumbers(matching: rawQuery)
-            numberSearchResults = response.results
-            numberSearchMessage = response.results.isEmpty
-                ? "No matches found for +\(response.queryDigits)."
-                : """
-                Found \(response.results.count) match\(response.results.count == 1 ? "" : "es") \
-                for +\(response.queryDigits).
-                """
+            repoResults = response.results
         } catch {
-            numberSearchResults = []
-            numberSearchMessage = "SpamSniper couldn’t search the local blocklist right now."
+            // non-fatal; continue with personal results
+        }
+
+        // --- Personal results ---
+        let personal = personalBlocklistStore.entries
+        let personalMatches = personal.filter { entry in
+            entry.normalizedDigits.contains(normalizedDigits)
+        }
+
+        // Build a lookup of repo results by phoneNumber for fast dedup
+        var repoByNumber: [Int64: BlockedNumberSearchResult] = [:]
+        for result in repoResults {
+            repoByNumber[result.record.phoneNumber] = result
+        }
+
+        // Build merged list:
+        // 1. For each repo result, check if there is also a personal entry → .combined
+        // 2. For personal-only entries, synthesize a BlockedNumberRecord → .personal
+        var merged: [BlockedNumberSearchResult] = repoResults.map { result in
+            if let personalEntry = personal.first(where: { $0.phoneNumber == result.record.phoneNumber }) {
+                return BlockedNumberSearchResult(
+                    record: result.record,
+                    matchedDigits: result.matchedDigits,
+                    matchKind: result.matchKind,
+                    source: .combined,
+                    personalEntry: personalEntry
+                )
+            }
+            return BlockedNumberSearchResult(
+                record: result.record,
+                matchedDigits: result.matchedDigits,
+                matchKind: result.matchKind,
+                source: .repo,
+                personalEntry: nil
+            )
+        }
+
+        // Add personal-only entries (not already in repo)
+        for entry in personalMatches where repoByNumber[entry.phoneNumber] == nil {
+            let record = BlockedNumberRecord(
+                phoneNumber: entry.phoneNumber,
+                displayName: entry.displayName.isEmpty ? entry.phoneNumberE164 : entry.displayName,
+                category: "Personal",
+                confidence: "high",
+                aliases: [],
+                tags: entry.tags,
+                notes: entry.notes
+            )
+            let matchKind: BlockedNumberSearchResult.MatchKind =
+                entry.normalizedDigits == normalizedDigits ? .exact
+                : entry.normalizedDigits.hasSuffix(normalizedDigits) ? .suffix
+                : .contains
+            merged.append(BlockedNumberSearchResult(
+                record: record,
+                matchedDigits: normalizedDigits,
+                matchKind: matchKind,
+                source: .personal,
+                personalEntry: entry
+            ))
+        }
+
+        // Sort: personal-only first, then combined, then repo; within each group keep existing order
+        merged.sort { lhs, rhs in
+            sourceOrder(lhs.source) < sourceOrder(rhs.source)
+        }
+
+        numberSearchResults = merged
+
+        let totalCount = merged.count
+        if totalCount == 0 {
+            numberSearchMessage = "No matches found for +\(normalizedDigits)."
+        } else {
+            numberSearchMessage = "Found \(totalCount) match\(totalCount == 1 ? "" : "es") for +\(normalizedDigits)."
+        }
+    }
+
+    private func sourceOrder(_ source: BlockedNumberSearchResult.ResultSource) -> Int {
+        switch source {
+        case .personal: return 0
+        case .combined: return 1
+        case .repo:     return 2
         }
     }
 
