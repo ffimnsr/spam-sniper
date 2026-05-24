@@ -10,8 +10,7 @@ extension SpamBlockerModel {
         let trimmed = sanitiseURL(repositoryInput)
         repositoryInput = trimmed
         repositoryTestPassed = false
-        pendingValidatedRepositoryURL = nil
-        pendingRepoMetaName = ""
+        resetPendingRepositoryValidation()
 
         guard !trimmed.isEmpty else {
             repositoryTestMessage = "Enter a GitHub repository URL or a direct repo.json URL first."
@@ -25,26 +24,33 @@ extension SpamBlockerModel {
             let result = try await BlocklistSyncService.validateRepository(at: trimmed)
             repositoryInput = result.normalizedRepositoryURL.absoluteString
             repositoryTestPassed = true
-            pendingValidatedRepositoryURL = result.normalizedRepositoryURL
-            pendingRepoMetaName = result.repositoryName
+            applyPendingRepositoryValidation(result)
             repositoryTestMessage = [
                 "Valid repo: \(result.repositoryName) with \(result.blocklistCount)",
                 "fetchable signed blocklist\(result.blocklistCount == 1 ? "" : "s")."
             ].joined(separator: " ")
         } catch {
+            resetPendingRepositoryValidation()
             repositoryTestMessage = error.localizedDescription
         }
     }
 
-    func saveValidatedRepositoryToList() async {
+    @discardableResult
+    func saveValidatedRepositoryToList() async -> Bool {
         guard let url = pendingValidatedRepositoryURL else {
             repositoryTestMessage = "Test the repository before saving it."
-            return
+            return false
+        }
+
+        guard !pendingKeyFingerprint.isEmpty && pendingKeyAlreadyTrusted else {
+            repositoryTestMessage = "Trust the repository signing key before adding the repository."
+            return false
         }
 
         var repo = StoredRepository(
             validatedURL: url,
-            repoName: pendingRepoMetaName.isEmpty ? url.absoluteString : pendingRepoMetaName
+            repoName: pendingRepoMetaName.isEmpty ? url.absoluteString : pendingRepoMetaName,
+            trustedKeyFingerprint: pendingKeyFingerprint
         )
         let trimmedCustomName = repositoryNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedCustomName.isEmpty {
@@ -54,11 +60,11 @@ extension SpamBlockerModel {
         BlocklistSyncService.addRepository(repo)
         repositoryInput = ""
         repositoryNameInput = ""
-        pendingRepoMetaName = ""
         repositoryTestPassed = false
-        pendingValidatedRepositoryURL = nil
+        resetPendingRepositoryValidation()
         repositoryTestMessage = "Repository \"\(repo.displayName)\" added."
         await refresh()
+        return true
     }
 
     func removeRepository(_ repo: StoredRepository) async {
@@ -79,12 +85,14 @@ extension SpamBlockerModel {
         editURLInput = repo.urlString
         editTestMessage = nil
         editTestPassed = false
+        resetEditRepositoryValidation()
     }
 
     func testEditRepositoryInput() async {
         let trimmed = sanitiseURL(editURLInput)
         editURLInput = trimmed
         editTestPassed = false
+        resetEditRepositoryValidation()
 
         guard !trimmed.isEmpty else {
             editTestMessage = "Enter a valid repo URL first."
@@ -98,39 +106,160 @@ extension SpamBlockerModel {
             let result = try await BlocklistSyncService.validateRepository(at: trimmed)
             editURLInput = result.normalizedRepositoryURL.absoluteString
             editTestPassed = true
+            applyEditRepositoryValidation(result)
             editTestMessage = """
             Valid: \(result.repositoryName) · \(result.blocklistCount) \
             blocklist\(result.blocklistCount == 1 ? "" : "s")
             """
         } catch {
+            resetEditRepositoryValidation()
             editTestMessage = error.localizedDescription
         }
     }
 
-    func saveEditedRepository() async {
-        guard let original = editingRepository else { return }
-        let trimmedURL = sanitiseURL(editURLInput)
-        let trimmedName = editNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedURL.isEmpty else {
-            editTestMessage = "URL cannot be empty."
-            return
+    @discardableResult
+    func saveEditedRepository() async -> Bool {
+        guard let original = editingRepository else { return false }
+        guard let updated = validatedEditedRepository(from: original) else {
+            return false
         }
 
-        let updated = original.updating(urlString: trimmedURL, customName: trimmedName)
         BlocklistSyncService.updateRepository(updated)
         editingRepository = nil
+        resetEditRepositoryValidation()
         await refresh()
+        return true
     }
 
     func cancelEditing() {
         editingRepository = nil
         editTestMessage = nil
         editTestPassed = false
+        resetEditRepositoryValidation()
+    }
+}
+
+// MARK: - Trusted Keys
+
+extension SpamBlockerModel {
+    func trustPendingKey(name: String? = nil) {
+        trustKey(
+            fingerprint: pendingKeyFingerprint,
+            armoredData: pendingKeyArmoredData,
+            name: name
+        ) {
+            pendingKeyAlreadyTrusted = true
+        }
+    }
+
+    func trustEditPendingKey(name: String? = nil) {
+        trustKey(
+            fingerprint: editPendingKeyFingerprint,
+            armoredData: editPendingKeyArmoredData,
+            name: name
+        ) {
+            editPendingKeyAlreadyTrusted = true
+        }
+    }
+
+    func addTrustedKey(armoredData: String, name: String) throws {
+        let data = armoredData.data(using: .utf8) ?? Data()
+        let fingerprint = try BlocklistSignatureVerifier.fingerprint(of: data)
+        let key = TrustedKey(
+            id: fingerprint,
+            name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Imported Key (\(String(fingerprint.suffix(8))))"
+            : name,
+            armoredData: armoredData,
+            addedAt: Date(),
+            isBuiltIn: false
+        )
+        SpamBlockerShared.addTrustedKey(key)
+        trustedKeys = SpamBlockerShared.trustedKeys
+    }
+
+    func removeTrustedKey(_ key: TrustedKey) {
+        guard !key.isBuiltIn else { return }
+        SpamBlockerShared.removeTrustedKey(id: key.id)
+        trustedKeys = SpamBlockerShared.trustedKeys
+        repositories = [.builtIn] + BlocklistSyncService.repositories
     }
 }
 
 extension SpamBlockerModel {
+    private func trustKey(
+        fingerprint: String,
+        armoredData: String,
+        name: String?,
+        onTrust: () -> Void
+    ) {
+        guard !fingerprint.isEmpty else { return }
+        let keyName = (name?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }
+        ?? "Imported Key (\(String(fingerprint.suffix(8))))"
+        let key = TrustedKey(
+            id: fingerprint,
+            name: keyName,
+            armoredData: armoredData,
+            addedAt: Date(),
+            isBuiltIn: false
+        )
+        SpamBlockerShared.addTrustedKey(key)
+        trustedKeys = SpamBlockerShared.trustedKeys
+        onTrust()
+    }
+
+    func resetPendingRepositoryValidation() {
+        pendingValidatedRepositoryURL = nil
+        pendingRepoMetaName = ""
+        pendingKeyFingerprint = ""
+        pendingKeyArmoredData = ""
+        pendingKeyAlreadyTrusted = false
+    }
+
+    func applyPendingRepositoryValidation(_ result: RepositoryValidationResult) {
+        pendingValidatedRepositoryURL = result.normalizedRepositoryURL
+        pendingRepoMetaName = result.repositoryName
+        pendingKeyFingerprint = result.signingKeyFingerprint
+        pendingKeyArmoredData = result.signingKeyArmoredData
+        pendingKeyAlreadyTrusted = result.isKeyAlreadyTrusted
+    }
+
+    func resetEditRepositoryValidation() {
+        editValidatedRepositoryURL = nil
+        editValidatedRepoMetaName = ""
+        editPendingKeyFingerprint = ""
+        editPendingKeyArmoredData = ""
+        editPendingKeyAlreadyTrusted = false
+    }
+
+    func applyEditRepositoryValidation(_ result: RepositoryValidationResult) {
+        editValidatedRepositoryURL = result.normalizedRepositoryURL
+        editValidatedRepoMetaName = result.repositoryName
+        editPendingKeyFingerprint = result.signingKeyFingerprint
+        editPendingKeyArmoredData = result.signingKeyArmoredData
+        editPendingKeyAlreadyTrusted = result.isKeyAlreadyTrusted
+    }
+
+    func validatedEditedRepository(from original: StoredRepository) -> StoredRepository? {
+        let trimmedName = editNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let validatedURL = editValidatedRepositoryURL else {
+            editTestMessage = "Test the URL before saving."
+            return nil
+        }
+
+        guard !editPendingKeyFingerprint.isEmpty && editPendingKeyAlreadyTrusted else {
+            editTestMessage = "Trust the repository signing key before saving the edit."
+            return nil
+        }
+
+        return original.updating(
+            urlString: validatedURL.absoluteString,
+            name: editValidatedRepoMetaName.isEmpty ? validatedURL.absoluteString : editValidatedRepoMetaName,
+            customName: trimmedName,
+            trustedKeyFingerprint: .some(editPendingKeyFingerprint)
+        )
+    }
+
     func sanitiseURL(_ raw: String) -> String {
         raw
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -138,52 +267,42 @@ extension SpamBlockerModel {
     }
 
     func flattenedRepositoryEntries() -> [BlocklistCatalogEntry] {
-        availableBlocklists.flatMap { country in
-            country.blocklists.map { repositoryEntry in
-                BlocklistCatalogEntry(
-                    id: repositoryEntry.id,
-                    countryCode: country.code,
-                    countryName: country.name,
-                    title: repositoryEntry.title,
-                    description: repositoryEntry.description,
-                    source: repositoryEntry.source,
-                    documentURL: BlocklistSyncService.repositoryURL?
-                        .deletingLastPathComponent()
-                        .appending(path: repositoryEntry.path),
-                    signatureURL: resolvedSignatureURL(
-                        entrySignatureURL: repositoryEntry.signatureURL,
-                        countrySignatureURL: country.signatureURL
-                    )
-                )
-            }
-        }
+        availableBlocklists.flatMap(\.blocklists)
     }
 
-    func resolvedSignatureURL(entrySignatureURL: String?, countrySignatureURL: String?) -> URL? {
-        let value = entrySignatureURL ?? countrySignatureURL
-        guard let value else {
-            return nil
+    func storedSelections(for entries: [BlocklistCatalogEntry]) -> [StoredBlocklistSelection] {
+        entries.map(StoredBlocklistSelection.init(entry:))
+    }
+
+    func selectionsAfterToggling(
+        _ entry: BlocklistCatalogEntry,
+        in repositoryEntries: [BlocklistCatalogEntry]? = nil
+    ) -> [BlocklistCatalogEntry] {
+        let repositoryEntries = repositoryEntries ?? flattenedRepositoryEntries()
+        var nextSelections = repositoryEntries.filter { selectedBlocklistIDs.contains($0.id) }
+
+        if selectedBlocklistIDs.contains(entry.id) {
+            if nextSelections.count > 1 {
+                nextSelections.removeAll { $0.id == entry.id }
+            }
+        } else {
+            nextSelections.append(entry)
         }
 
-        if let absoluteURL = URL(string: value), absoluteURL.scheme != nil {
-            return absoluteURL
-        }
-
-        return BlocklistSyncService.repositoryURL?
-            .deletingLastPathComponent()
-            .appending(path: value)
+        nextSelections.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        return nextSelections
     }
 
     func syncSelections(_ selections: [BlocklistCatalogEntry]) async throws {
-        let selectedEntries = selections.map(StoredBlocklistSelection.init(entry:))
+        let selectedEntries = storedSelections(for: selections)
         let contactNumbers = await contactNumbersForSync()
 
         try await BlocklistSyncService.refreshNow(
             using: selectedEntries,
             excluding: contactNumbers
         )
-        let snapshot = try BlocklistSyncService.fetchSnapshot()
-        applySnapshot(snapshot)
+        let snapshot = try BlocklistSyncService.fetchEffectiveSnapshot()
+        applyEffectiveSnapshot(snapshot)
         try? await reloadExtension()
         extensionStatus = try await fetchExtensionStatus()
     }

@@ -6,7 +6,69 @@
 import CallKit
 import Foundation
 
+struct RefreshCoordinatorResult {
+    let repositoryFetch: RepositoryFetchResult
+    let resolvedSelections: [StoredBlocklistSelection]
+    let signatureStatus: String
+    let databaseSummary: BlocklistDatabaseSummary
+    let effectiveSnapshot: EffectiveBlocklistSnapshot
+    let extensionStatus: SpamBlockerModel.ExtensionStatus
+
+    var repository: BlocklistRepositoryDocument {
+        repositoryFetch.document
+    }
+}
+
+struct ManualSyncStatus: Equatable {
+    enum Style: Equatable {
+        case success
+        case warning
+        case failure
+    }
+
+    let title: String
+    let message: String
+    let style: Style
+    let recordedAt: Date
+}
+
+struct RepositoryKeyStatus: Equatable {
+    enum State: Equatable {
+        case builtIn
+        case trusted
+        case untrusted
+        case missing
+    }
+
+    let state: State
+    let title: String
+    let detail: String
+    let fingerprint: String?
+
+    var isWarning: Bool {
+        switch state {
+        case .trusted, .builtIn:
+            return false
+        case .untrusted, .missing:
+            return true
+        }
+    }
+}
+
+struct RepositoryKeyMatchStatus: Equatable {
+    let title: String
+    let detail: String
+    let isWarning: Bool
+}
+
 extension SpamBlockerModel {
+    func resetNumberSearch() {
+        numberSearchQuery = ""
+        numberSearchResults = []
+        numberSearchMessage = Self.defaultNumberSearchMessage
+        isSearchingNumbers = false
+    }
+
     func searchNumbers() async {
         let rawQuery = numberSearchQuery
         let normalizedDigits = BlockedNumberRecord.normalizedDigits(from: rawQuery)
@@ -22,93 +84,18 @@ extension SpamBlockerModel {
         isSearchingNumbers = true
         defer { isSearchingNumbers = false }
 
-        // --- Repo results ---
-        var repoResults: [BlockedNumberSearchResult] = []
         do {
-            let response = try BlocklistDatabase.searchNumbers(matching: rawQuery)
-            repoResults = response.results
+            let response = try BlocklistSyncService.searchEffectiveNumbers(matching: rawQuery)
+            numberSearchResults = response.results
         } catch {
-            // non-fatal; continue with personal results
+            numberSearchResults = []
         }
 
-        // --- Personal results ---
-        let personal = personalBlocklistStore.entries
-        let personalMatches = personal.filter { entry in
-            entry.normalizedDigits.contains(normalizedDigits)
-        }
-
-        // Build a lookup of repo results by phoneNumber for fast dedup
-        var repoByNumber: [Int64: BlockedNumberSearchResult] = [:]
-        for result in repoResults {
-            repoByNumber[result.record.phoneNumber] = result
-        }
-
-        // Build merged list:
-        // 1. For each repo result, check if there is also a personal entry → .combined
-        // 2. For personal-only entries, synthesize a BlockedNumberRecord → .personal
-        var merged: [BlockedNumberSearchResult] = repoResults.map { result in
-            if let personalEntry = personal.first(where: { $0.phoneNumber == result.record.phoneNumber }) {
-                return BlockedNumberSearchResult(
-                    record: result.record,
-                    matchedDigits: result.matchedDigits,
-                    matchKind: result.matchKind,
-                    source: .combined,
-                    personalEntry: personalEntry
-                )
-            }
-            return BlockedNumberSearchResult(
-                record: result.record,
-                matchedDigits: result.matchedDigits,
-                matchKind: result.matchKind,
-                source: .repo,
-                personalEntry: nil
-            )
-        }
-
-        // Add personal-only entries (not already in repo)
-        for entry in personalMatches where repoByNumber[entry.phoneNumber] == nil {
-            let record = BlockedNumberRecord(
-                phoneNumber: entry.phoneNumber,
-                displayName: entry.displayName.isEmpty ? entry.phoneNumberE164 : entry.displayName,
-                category: "Personal",
-                confidence: "high",
-                aliases: [],
-                tags: entry.tags,
-                notes: entry.notes
-            )
-            let matchKind: BlockedNumberSearchResult.MatchKind =
-                entry.normalizedDigits == normalizedDigits ? .exact
-                : entry.normalizedDigits.hasSuffix(normalizedDigits) ? .suffix
-                : .contains
-            merged.append(BlockedNumberSearchResult(
-                record: record,
-                matchedDigits: normalizedDigits,
-                matchKind: matchKind,
-                source: .personal,
-                personalEntry: entry
-            ))
-        }
-
-        // Sort: personal-only first, then combined, then repo; within each group keep existing order
-        merged.sort { lhs, rhs in
-            sourceOrder(lhs.source) < sourceOrder(rhs.source)
-        }
-
-        numberSearchResults = merged
-
-        let totalCount = merged.count
+        let totalCount = numberSearchResults.count
         if totalCount == 0 {
             numberSearchMessage = "No matches found for +\(normalizedDigits)."
         } else {
             numberSearchMessage = "Found \(totalCount) match\(totalCount == 1 ? "" : "es") for +\(normalizedDigits)."
-        }
-    }
-
-    private func sourceOrder(_ source: BlockedNumberSearchResult.ResultSource) -> Int {
-        switch source {
-        case .personal: return 0
-        case .combined: return 1
-        case .repo:     return 2
         }
     }
 
@@ -157,25 +144,51 @@ extension SpamBlockerModel {
 #endif
     }
 
-    func applySnapshot(_ snapshot: BlocklistSnapshot) {
-        blockedNumberCount = snapshot.records.count
+    func applyEffectiveSnapshot(_ snapshot: EffectiveBlocklistSnapshot) {
+        blockedNumberCount = snapshot.totalEntries
         blocklistSource = snapshot.source
         lastSyncDescription = snapshot.syncedAt.map {
             Self.syncFormatter.localizedString(for: $0, relativeTo: Date())
         } ?? "Not synced yet"
     }
 
-    func applySummary(_ summary: BlocklistDatabaseSummary, snapshot: BlocklistSnapshot) {
-        blockedNumberCount = summary.totalEntries
-        blocklistSource = summary.source ?? snapshot.source
+    func refreshStoredState() {
+        SpamBlockerShared.registerDefaults()
+        isBlockingEnabled = SpamBlockerShared.isEnabled
+        contactsPermissionState = ContactFilteringService.currentPermissionState()
+        contactsStatusDescription = contactsPermissionState.description
+        repositories = [.builtIn] + BlocklistSyncService.repositories
+        activeRepositoryID = BlocklistSyncService.activeRepository.id
+        trustedKeys = SpamBlockerShared.trustedKeys
+        refreshPersonalEntries()
+    }
+
+    func applyCachedEffectiveSnapshotIfAvailable() {
+        if let snapshot = try? BlocklistSyncService.fetchEffectiveSnapshot() {
+            applyEffectiveSnapshot(snapshot)
+        }
+    }
+
+    func applySummary(_ summary: BlocklistDatabaseSummary, effectiveSnapshot: EffectiveBlocklistSnapshot) {
+        blockedNumberCount = effectiveSnapshot.totalEntries
+        blocklistSource = effectiveSnapshot.source
         lastSyncDescription = summary.syncedAt.map {
             Self.syncFormatter.localizedString(for: $0, relativeTo: Date())
         } ?? "Not synced yet"
     }
 
+    func applyRefreshResult(_ result: RefreshCoordinatorResult) {
+        availableBlocklists = result.repository.resolvedCountries(relativeTo: BlocklistSyncService.repositoryURL)
+        applySelections(result.resolvedSelections)
+        blocklistSignatureStatus = result.signatureStatus
+        applySummary(result.databaseSummary, effectiveSnapshot: result.effectiveSnapshot)
+        extensionStatus = result.extensionStatus
+        refreshStoredState()
+    }
+
     @discardableResult
     func applyRepository(_ repository: BlocklistRepositoryDocument) -> [StoredBlocklistSelection] {
-        availableBlocklists = repository.countries
+        availableBlocklists = repository.resolvedCountries(relativeTo: BlocklistSyncService.repositoryURL)
         if let selections = try? BlocklistSyncService.resolveSelections(in: repository) {
             applySelections(selections)
             return selections
@@ -210,19 +223,198 @@ extension SpamBlockerModel {
         selectedBlocklistDescription = selections.map(\.title).joined(separator: ", ")
         selectedBlocklistCountry = countryLabels.joined(separator: " • ")
         blocklistSignatureStatus = selections.contains { $0.resolvedSignatureURL != nil }
-            ? "Checking"
-            : "Unavailable"
+        ? "Checking"
+        : "Unavailable"
     }
 
     func updateSignatureStatus(for selections: [StoredBlocklistSelection]) async {
-        guard selections.contains(where: { $0.resolvedSignatureURL != nil }) else {
-            blocklistSignatureStatus = "Unavailable"
-            return
+        blocklistSignatureStatus = await signatureStatusDescription(for: selections)
+    }
+
+    func coordinatedRefresh(forceSync: Bool) async throws -> RefreshCoordinatorResult {
+        let repositoryFetch = try await BlocklistSyncService.fetchRepositoryResult()
+        let selections = try BlocklistSyncService.resolveSelections(in: repositoryFetch.document)
+        let signatureStatus = await signatureStatusDescription(for: selections)
+        let contactNumbers = await contactNumbersForSync()
+
+        let summary: BlocklistDatabaseSummary
+        if forceSync {
+            try await BlocklistSyncService.refreshNow(using: selections, excluding: contactNumbers)
+            summary = try BlocklistDatabase.fetchSummary()
+        } else {
+            summary = try await BlocklistSyncService.refreshIfNeeded(using: selections, excluding: contactNumbers)
         }
 
-        blocklistSignatureStatus = await BlocklistSyncService.signatureStatus(for: selections)
-            ? "Good"
-            : "Unavailable"
+        let effectiveSnapshot = try BlocklistSyncService.fetchEffectiveSnapshot()
+        try? await reloadExtension()
+        let extensionStatus = try await fetchExtensionStatus()
+
+        return RefreshCoordinatorResult(
+            repositoryFetch: repositoryFetch,
+            resolvedSelections: selections,
+            signatureStatus: signatureStatus,
+            databaseSummary: summary,
+            effectiveSnapshot: effectiveSnapshot,
+            extensionStatus: extensionStatus
+        )
+    }
+
+    func signatureStatusDescription(for selections: [StoredBlocklistSelection]) async -> String {
+        guard selections.contains(where: { $0.resolvedSignatureURL != nil }) else {
+            return "Unavailable"
+        }
+
+        return await BlocklistSyncService.signatureStatus(for: selections) ? "Good" : "Unavailable"
+    }
+
+    func manualSyncStatus(for result: RefreshCoordinatorResult, at date: Date = Date()) -> ManualSyncStatus {
+        if result.repositoryFetch.usedBundledSeedFallback {
+            return ManualSyncStatus(
+                title: "Bundled fallback used",
+                message: "SpamSniper refreshed using the bundled community repository catalog because the live built-in index was unavailable.",
+                style: .warning,
+                recordedAt: date
+            )
+        }
+
+        return ManualSyncStatus(
+            title: "Sync complete",
+            message: "SpamSniper refreshed repository metadata, rebuilt the blocking feed, and reloaded the Call Directory extension.",
+            style: .success,
+            recordedAt: date
+        )
+    }
+
+    func manualSyncStatus(
+        for error: Error,
+        fallbackMessage: String,
+        at date: Date = Date()
+    ) -> ManualSyncStatus {
+        if let syncError = error as? BlocklistSyncServiceError {
+            switch syncError {
+            case let .repositoryUnavailable(repositoryName):
+                return ManualSyncStatus(
+                    title: "Repository unavailable",
+                    message: "The active custom repository \"" + repositoryName + "\" is unavailable right now. SpamSniper kept your last synced snapshot.",
+                    style: .warning,
+                    recordedAt: date
+                )
+            case .repositorySignatureUnavailable,
+                    .repositorySignatureInvalid,
+                    .blocklistSignatureUnavailable,
+                    .blocklistSignatureInvalid:
+                return ManualSyncStatus(
+                    title: "Signature verification failed",
+                    message: "SpamSniper refused to complete the manual sync because repository or blocklist signatures could not be verified.",
+                    style: .failure,
+                    recordedAt: date
+                )
+            default:
+                break
+            }
+        }
+
+        return ManualSyncStatus(
+            title: "Sync needs attention",
+            message: fallbackMessage,
+            style: .failure,
+            recordedAt: date
+        )
+    }
+
+    func repositoriesUsingTrustedKey(_ key: TrustedKey) -> [StoredRepository] {
+        repositories
+            .filter { !$0.isBuiltIn && $0.trustedKeyFingerprint?.uppercased() == key.id.uppercased() }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+
+    func repositoryKeyStatus(for repository: StoredRepository) -> RepositoryKeyStatus {
+        guard !repository.isBuiltIn else {
+            return RepositoryKeyStatus(
+                state: .builtIn,
+                title: "Built-in community key",
+                detail: "This repository always uses SpamSniper’s bundled community signing key.",
+                fingerprint: nil
+            )
+        }
+
+        guard let fingerprint = repository.trustedKeyFingerprint, !fingerprint.isEmpty else {
+            return RepositoryKeyStatus(
+                state: .missing,
+                title: "No saved key association",
+                detail: "Test this repository again to capture and trust its signing key before the next sync.",
+                fingerprint: nil
+            )
+        }
+
+        if SpamBlockerShared.isTrusted(fingerprint: fingerprint) {
+            return RepositoryKeyStatus(
+                state: .trusted,
+                title: "Trusted key matches last validation",
+                detail: "The key saved for this repository is still trusted and will be used for future syncs.",
+                fingerprint: fingerprint
+            )
+        }
+
+        return RepositoryKeyStatus(
+            state: .untrusted,
+            title: "Last validated key is no longer trusted",
+            detail: "Syncing this repository will fail until that key is trusted again or the repository is revalidated.",
+            fingerprint: fingerprint
+        )
+    }
+
+    func repositoryKeyMatchStatus(
+        savedFingerprint: String?,
+        validatedFingerprint: String
+    ) -> RepositoryKeyMatchStatus {
+        let normalizedSavedFingerprint = savedFingerprint?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let normalizedSavedFingerprint, !normalizedSavedFingerprint.isEmpty else {
+            return RepositoryKeyMatchStatus(
+                title: "New key association",
+                detail: "Saving will bind this repository to the validated signing key shown below.",
+                isWarning: false
+            )
+        }
+
+        if normalizedSavedFingerprint.caseInsensitiveCompare(validatedFingerprint) == .orderedSame {
+            return RepositoryKeyMatchStatus(
+                title: "Matches current saved key",
+                detail: "The validated signing key matches the repository’s currently saved fingerprint.",
+                isWarning: false
+            )
+        }
+
+        return RepositoryKeyMatchStatus(
+            title: "Different from saved key",
+            detail: "Saving will replace the repository’s saved fingerprint with the validated key from this URL.",
+            isWarning: true
+        )
+    }
+
+    @discardableResult
+    func processPersonalBlocklistChange() async -> Bool {
+        refreshPersonalEntries()
+        errorMessage = nil
+
+        if let effectiveSnapshot = try? BlocklistSyncService.fetchEffectiveSnapshot() {
+            applyEffectiveSnapshot(effectiveSnapshot)
+        }
+
+        if !numberSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await searchNumbers()
+        }
+
+        do {
+            try await reloadExtension()
+            extensionStatus = try await fetchExtensionStatus()
+            return true
+        } catch {
+            extensionStatus = fallbackExtensionStatus(for: error)
+            errorMessage = userFacingMessage(for: error)
+            return false
+        }
     }
 
     func userFacingMessage(for error: Error) -> String {
@@ -280,8 +472,12 @@ private extension SpamBlockerModel {
             return "No blocklists are currently available. Try again later."
         case .invalidRepositoryURL:
             return "The custom repository URL is invalid. Use a GitHub repo URL or a direct repo.json URL."
+        case let .repositoryUnavailable(repositoryName):
+            return "The custom repository \"\(repositoryName)\" is unavailable right now. SpamSniper kept your last synced snapshot."
         case .repositoryKeyUnavailable:
             return "SpamSniper could not find a usable public key for the selected repository."
+        case .repositoryKeyUntrusted:
+            return "The repository signing key is not trusted. Go to Settings → Trusted Keys and add the key."
         case .repositoryMetadataInvalid:
             return "The selected repository metadata is invalid."
         case .bundledSeedMissing:

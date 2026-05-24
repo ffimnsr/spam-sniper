@@ -11,7 +11,9 @@ enum BlocklistSyncServiceError: LocalizedError {
     case bundledSeedMissing(String)
     case repositoryEmpty
     case invalidRepositoryURL
+    case repositoryUnavailable(String)
     case repositoryKeyUnavailable
+    case repositoryKeyUntrusted
     case repositoryMetadataInvalid
     case remoteBlocklistUnavailable(String)
     case repositorySignatureUnavailable
@@ -30,8 +32,12 @@ enum BlocklistSyncServiceError: LocalizedError {
             return "The blocklist repository did not publish any blocklists."
         case .invalidRepositoryURL:
             return "The repository URL is invalid. Use a GitHub repository URL or a direct repo.json URL."
+        case let .repositoryUnavailable(repositoryName):
+            return "The repository \"\(repositoryName)\" is currently unavailable."
         case .repositoryKeyUnavailable:
             return "The repository public key is missing or could not be fetched."
+        case .repositoryKeyUntrusted:
+            return "The repository signing key is not in your trusted keys. Add it in Settings → Trusted Keys."
         case .repositoryMetadataInvalid:
             return "The repository metadata is invalid or incomplete."
         case let .remoteBlocklistUnavailable(title):
@@ -54,6 +60,28 @@ struct RepositoryValidationResult {
     let normalizedRepositoryURL: URL
     let repositoryName: String
     let blocklistCount: Int
+    /// Uppercase hex fingerprint of the key that signed the repository.
+    let signingKeyFingerprint: String
+    /// ASCII-armored public key data.
+    let signingKeyArmoredData: String
+    /// `true` when the signing key fingerprint is already in the user's trusted keys store.
+    var isKeyAlreadyTrusted: Bool {
+        SpamBlockerShared.isTrusted(fingerprint: signingKeyFingerprint)
+    }
+}
+
+struct RepositoryFetchResult {
+    enum Source {
+        case verifiedRemote
+        case bundledSeedFallback
+    }
+
+    let document: BlocklistRepositoryDocument
+    let source: Source
+
+    var usedBundledSeedFallback: Bool {
+        source == .bundledSeedFallback
+    }
 }
 
 enum BlocklistSyncService {
@@ -96,6 +124,15 @@ enum BlocklistSyncService {
 
         let repository = try await fetchRepository()
         let selections = try resolveSelections(in: repository)
+        return try await refreshIfNeeded(using: selections, excluding: contactNumbers)
+    }
+
+    static func refreshIfNeeded(
+        using selections: [StoredBlocklistSelection],
+        excluding contactNumbers: Set<Int64> = []
+    ) async throws -> BlocklistDatabaseSummary {
+        try BlocklistDatabase.initializeIfNeeded()
+
         let currentSummary = try BlocklistDatabase.fetchSummary()
         if shouldRefresh(summary: currentSummary, selectedBlocklistIDs: selections.map(\.id)) {
             try await refreshNow(using: selections, excluding: contactNumbers)
@@ -137,33 +174,89 @@ enum BlocklistSyncService {
         return try BlocklistDatabase.fetchSnapshot()
     }
 
+    static func fetchEffectiveSnapshot() throws -> EffectiveBlocklistSnapshot {
+        try BlocklistDatabase.initializeIfNeeded()
+        return try EffectiveBlocklistComposer.fetchSnapshot()
+    }
+
+    static func searchEffectiveNumbers(
+        matching rawQuery: String,
+        limit: Int = 100
+    ) throws -> EffectiveBlocklistSearchResponse {
+        try BlocklistDatabase.initializeIfNeeded()
+        return try EffectiveBlocklistComposer.searchNumbers(matching: rawQuery, limit: limit)
+    }
+
     static func fetchRepository() async throws -> BlocklistRepositoryDocument {
-        guard let repositoryURL else {
-            return try loadSeedRepository()
+        try await fetchRepositoryResult().document
+    }
+
+    static func fetchRepositoryResult() async throws -> RepositoryFetchResult {
+        try await fetchRepositoryResult(
+            for: activeRepository,
+            fetchVerifiedRepository: { repositoryURL in
+                try await fetchVerifiedRepositoryContext(from: repositoryURL).document
+            },
+            loadSeedRepository: loadSeedRepository
+        )
+    }
+
+    static func fetchRepository(
+        for activeRepository: StoredRepository,
+        fetchVerifiedRepository: (URL) async throws -> BlocklistRepositoryDocument,
+        loadSeedRepository: () throws -> BlocklistRepositoryDocument
+    ) async throws -> BlocklistRepositoryDocument {
+        try await fetchRepositoryResult(
+            for: activeRepository,
+            fetchVerifiedRepository: fetchVerifiedRepository,
+            loadSeedRepository: loadSeedRepository
+        ).document
+    }
+
+    static func fetchRepositoryResult(
+        for activeRepository: StoredRepository,
+        fetchVerifiedRepository: (URL) async throws -> BlocklistRepositoryDocument,
+        loadSeedRepository: () throws -> BlocklistRepositoryDocument
+    ) async throws -> RepositoryFetchResult {
+        guard let repositoryURL = activeRepository.resolvedURL else {
+            if activeRepository.isBuiltIn {
+                return RepositoryFetchResult(document: try loadSeedRepository(), source: .bundledSeedFallback)
+            }
+
+            throw BlocklistSyncServiceError.invalidRepositoryURL
         }
 
         do {
-            return try await fetchVerifiedRepositoryContext(
-                from: repositoryURL
-            ).document
+            return RepositoryFetchResult(
+                document: try await fetchVerifiedRepository(repositoryURL),
+                source: .verifiedRemote
+            )
         } catch let error as BlocklistSyncServiceError {
+            guard activeRepository.isBuiltIn else {
+                throw error
+            }
+
             switch error {
             case .repositorySignatureUnavailable,
-                 .repositorySignatureInvalid,
-                 .repositoryKeyUnavailable,
-                 .repositoryMetadataInvalid:
+                    .repositorySignatureInvalid,
+                    .repositoryKeyUnavailable,
+                    .repositoryMetadataInvalid:
                 throw error
             default:
-                return try loadSeedRepository()
+                return RepositoryFetchResult(document: try loadSeedRepository(), source: .bundledSeedFallback)
             }
         } catch {
-            return try loadSeedRepository()
+            guard !activeRepository.isBuiltIn else {
+                return RepositoryFetchResult(document: try loadSeedRepository(), source: .bundledSeedFallback)
+            }
+
+            throw BlocklistSyncServiceError.repositoryUnavailable(activeRepository.displayName)
         }
     }
 
     static func validateRepository(at input: String) async throws -> RepositoryValidationResult {
         let normalizedRepositoryURL = try await resolvedRepositoryURLForValidation(from: input)
-        let context = try await fetchVerifiedRepositoryContext(from: normalizedRepositoryURL)
+        let context = try await fetchVerifiedRepositoryContext(from: normalizedRepositoryURL, requireTrust: false)
         let entries = context.document.catalogEntries(relativeTo: normalizedRepositoryURL)
 
         guard !entries.isEmpty else {
@@ -191,7 +284,9 @@ enum BlocklistSyncService {
         return RepositoryValidationResult(
             normalizedRepositoryURL: normalizedRepositoryURL,
             repositoryName: context.document.name,
-            blocklistCount: entries.count
+            blocklistCount: entries.count,
+            signingKeyFingerprint: context.publicKeyFingerprint,
+            signingKeyArmoredData: context.publicKeyArmoredData
         )
     }
 
@@ -229,6 +324,6 @@ enum BlocklistSyncService {
     }
 
     static var repositoryURL: URL? {
-        SpamBlockerShared.activeRepositoryURL ?? defaultRepositoryURL
+        activeRepository.resolvedURL ?? defaultRepositoryURL
     }
 }

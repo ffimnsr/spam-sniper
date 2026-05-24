@@ -20,6 +20,13 @@
 			remoteGlobalIDString = A10000022F6BBE9600A2D40B;
 			remoteInfo = SpamSniperCallBlocker;
 		};
+		A30000062F6D2000A2D40B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98E5C1092F6BBE9600A2D40B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 98E5C1102F6BBE9600A2D40B;
+			remoteInfo = SpamSniper;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -39,6 +46,7 @@
 /* Begin PBXFileReference section */
 		98E5C1112F6BBE9600A2D40B /* SpamSniper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpamSniper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000002F6BBE9600A2D40B /* SpamSniperCallBlocker.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SpamSniperCallBlocker.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A30000002F6D2000A2D40B /* SpamSniperTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpamSniperTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -70,6 +78,11 @@
 			path = Shared;
 			sourceTree = "<group>";
 		};
+		A30000012F6D2000A2D40B /* SpamSniperTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SpamSniperTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +102,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A30000022F6D2000A2D40B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -98,6 +118,7 @@
 				98E5C1132F6BBE9600A2D40B /* SpamSniper */,
 				A10000082F6BBE9600A2D40B /* SpamSniperCallBlocker */,
 				A10000092F6BBE9600A2D40B /* Shared */,
+				A30000012F6D2000A2D40B /* SpamSniperTests */,
 				98E5C1122F6BBE9600A2D40B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -107,6 +128,7 @@
 			children = (
 				98E5C1112F6BBE9600A2D40B /* SpamSniper.app */,
 				A10000002F6BBE9600A2D40B /* SpamSniperCallBlocker.appex */,
+				A30000002F6D2000A2D40B /* SpamSniperTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -164,6 +186,29 @@
 			productReference = A10000002F6BBE9600A2D40B /* SpamSniperCallBlocker.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		A30000052F6D2000A2D40B /* SpamSniperTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A300000A2F6D2000A2D40B /* Build configuration list for PBXNativeTarget "SpamSniperTests" */;
+			buildPhases = (
+				A30000032F6D2000A2D40B /* Sources */,
+				A30000022F6D2000A2D40B /* Frameworks */,
+				A30000042F6D2000A2D40B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A30000072F6D2000A2D40B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A30000012F6D2000A2D40B /* SpamSniperTests */,
+			);
+			name = SpamSniperTests;
+			packageProductDependencies = (
+			);
+			productName = SpamSniperTests;
+			productReference = A30000002F6D2000A2D40B /* SpamSniperTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -179,6 +224,10 @@
 					};
 					A10000022F6BBE9600A2D40B = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					A30000052F6D2000A2D40B = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 98E5C1102F6BBE9600A2D40B;
 					};
 				};
 			};
@@ -201,6 +250,7 @@
 			targets = (
 				98E5C1102F6BBE9600A2D40B /* SpamSniper */,
 				A10000022F6BBE9600A2D40B /* SpamSniperCallBlocker */,
+				A30000052F6D2000A2D40B /* SpamSniperTests */,
 			);
 		};
 /* End PBXProject section */
@@ -214,6 +264,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A100000C2F6BBE9600A2D40B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A30000042F6D2000A2D40B /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -237,6 +294,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A30000032F6D2000A2D40B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -244,6 +308,11 @@
 			isa = PBXTargetDependency;
 			target = A10000022F6BBE9600A2D40B /* SpamSniperCallBlocker */;
 			targetProxy = A10000032F6BBE9600A2D40B /* PBXContainerItemProxy */;
+		};
+		A30000072F6D2000A2D40B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 98E5C1102F6BBE9600A2D40B /* SpamSniper */;
+			targetProxy = A30000062F6D2000A2D40B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -501,6 +570,64 @@
 			};
 			name = Release;
 		};
+		A30000082F6D2000A2D40B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vastorigins.app.SpamSniperTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SpamSniper.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SpamSniper";
+				TEST_TARGET_NAME = SpamSniper;
+			};
+			name = Debug;
+		};
+		A30000092F6D2000A2D40B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vastorigins.app.SpamSniperTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SpamSniper.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SpamSniper";
+				TEST_TARGET_NAME = SpamSniper;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -527,6 +654,15 @@
 			buildConfigurations = (
 				A100000D2F6BBE9600A2D40B /* Debug */,
 				A100000E2F6BBE9600A2D40B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A300000A2F6D2000A2D40B /* Build configuration list for PBXNativeTarget "SpamSniperTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A30000082F6D2000A2D40B /* Debug */,
+				A30000092F6D2000A2D40B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

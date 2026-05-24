@@ -21,11 +21,13 @@ enum BlocklistSignatureVerifierError: LocalizedError {
 }
 
 enum BlocklistSignatureVerifier {
+    /// Verify using the bundled trusted community key only.
     static func verifyDetachedSignature(signedData: Data, signatureData: Data) throws {
         let keys = try readTrustedKeys()
         try verifyDetachedSignature(signedData: signedData, signatureData: signatureData, using: keys)
     }
 
+    /// Verify using an explicitly supplied public-key blob.
     static func verifyDetachedSignature(signedData: Data, signatureData: Data, publicKeyData: Data) throws {
         let keys: [Key]
         do {
@@ -35,6 +37,21 @@ enum BlocklistSignatureVerifier {
         }
 
         try verifyDetachedSignature(signedData: signedData, signatureData: signatureData, using: keys)
+    }
+
+    /// Returns the uppercase hex fingerprint of the first key in `publicKeyData`.
+    static func fingerprint(of publicKeyData: Data) throws -> String {
+        guard let key = try? ObjectivePGP.readKeys(from: publicKeyData).first else {
+            throw BlocklistSignatureVerifierError.invalidSignature
+        }
+        return fingerprintString(for: key)
+    }
+
+    private static func fingerprintString(for key: Key) -> String {
+        if let fp = key.publicKey?.fingerprint {
+            return fp.description.uppercased().replacingOccurrences(of: " ", with: "")
+        }
+        return key.keyID.longIdentifier.uppercased()
     }
 
     private static func verifyDetachedSignature(signedData: Data, signatureData: Data, using keys: [Key]) throws {

@@ -2,29 +2,45 @@ import SwiftUI
 
 // MARK: - SettingsView
 
+@MainActor
 struct SettingsView: View {
     @Bindable var model: SpamBlockerModel
-
+    @State private var isAddRepositoryPresented = false
+    
     var body: some View {
         Form {
             repositoriesSection
-            addRepositorySection
+            trustedKeysSection
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    isAddRepositoryPresented = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("Add Repository")
+            }
+        }
+        .sheet(isPresented: $isAddRepositoryPresented) {
+            AddRepositoryView(model: model)
+        }
         .sheet(item: $model.editingRepository) { _ in
             EditRepositorySheet(model: model)
         }
     }
-
+    
     // MARK: Repositories list
-
+    
     private var repositoriesSection: some View {
         Section {
             ForEach(model.repositories) { repo in
                 RepositoryRowView(
                     repo: repo,
                     isActive: repo.id == model.activeRepositoryID,
+                    hasTrustedKey: repo.isBuiltIn || (repo.trustedKeyFingerprint.map(SpamBlockerShared.isTrusted(fingerprint:)) ?? false),
                     onActivate: {
                         Task { await model.setActiveRepository(repo) }
                     },
@@ -43,72 +59,29 @@ struct SettingsView: View {
         } header: {
             Text("Repositories")
         } footer: {
-            Text("Tap a repository to make it active. Tap ••• to edit. Swipe left to delete custom repositories.")
+            Text("Tap a repository to make it active. SpamSniper restores that repository’s saved blocklist selections when you switch. Tap ••• to edit. Swipe left to delete custom repositories.")
                 .font(.footnote)
         }
     }
-
-    // MARK: Add new repository
-
-    private var addRepositorySection: some View {
-        Section("Add Repository") {
-            TextField(
-                model.pendingValidatedRepositoryURL == nil
-                ? "Label (uses repo name if blank)"
-                : "Label (uses \"\(model.pendingRepoMetaName)\" if blank)",
-                text: $model.repositoryNameInput
-            )
-            .autocorrectionDisabled()
-
-            TextField(
-                "GitHub repo URL or direct repo.json URL",
-                text: $model.repositoryInput,
-                axis: .vertical
-            )
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .keyboardType(.URL)
-            .onChange(of: model.repositoryInput) { _, _ in
-                // Reset test state whenever the user edits the URL
-                model.repositoryTestPassed = false
-                model.pendingValidatedRepositoryURL = nil
-                model.pendingRepoMetaName = ""
-                model.repositoryTestMessage = nil
-            }
-
-            Text(
-                """
-                Paste a GitHub repo URL or a direct raw repo.json URL. \
-                The test verifies signatures and blocklist availability.
-                """
-            )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            Button(model.isTestingRepository ? "Testing…" : "Test Repository") {
-                Task { await model.testRepositoryInput() }
-            }
-            .disabled(
-                model.isTestingRepository ||
-                model.repositoryInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            )
-
-            Button("Add to List") {
-                Task { await model.saveValidatedRepositoryToList() }
-            }
-            .disabled(!model.repositoryTestPassed || model.isTestingRepository)
-
-            if let msg = model.repositoryTestMessage {
-                Label {
-                    Text(msg)
-                        .font(.footnote)
-                } icon: {
-                    Image(systemName: model.repositoryTestPassed ? "checkmark.circle.fill" : "exclamationmark.circle")
-                        .foregroundStyle(model.repositoryTestPassed ? .green : .orange)
+    
+    // MARK: Trusted Keys
+    
+    private var trustedKeysSection: some View {
+        Section {
+            NavigationLink {
+                TrustedKeysView(model: model)
+            } label: {
+                HStack {
+                    Label("Trusted Keys", systemImage: "key.fill")
+                    Spacer()
+                    Text("\(model.trustedKeys.count)")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
                 }
-                .font(.footnote)
-                .foregroundStyle(model.repositoryTestPassed ? .green : .secondary)
             }
+        } footer: {
+            Text("Manage the OpenPGP public keys used to verify repository metadata and downloaded blocklist signatures before sync.")
+                .font(.footnote)
         }
     }
 }
@@ -118,18 +91,31 @@ struct SettingsView: View {
 private struct RepositoryRowView: View {
     let repo: StoredRepository
     let isActive: Bool
+    let hasTrustedKey: Bool
     let onActivate: () -> Void
     let onEdit: () -> Void
-
+    
+    @Environment(\.colorScheme) private var colorScheme
+    
+    private var palette: AppPalette { AppPalette(colorScheme: colorScheme) }
+    
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isActive ? Color.accentColor : Color.secondary)
+                .foregroundStyle(isActive ? palette.tint : palette.secondaryText)
                 .onTapGesture(perform: onActivate)
-
+            
             VStack(alignment: .leading, spacing: 2) {
-                Text(repo.displayName)
-                    .font(.subheadline)
+                HStack(spacing: 4) {
+                    Text(repo.displayName)
+                        .font(.subheadline)
+                    if !hasTrustedKey {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(palette.warning)
+                            .imageScale(.small)
+                            .help("No trusted key associated. Syncing will fail until you trust the signing key.")
+                    }
+                }
                 if repo.isBuiltIn {
                     Text("Built-in")
                         .font(.caption)
@@ -144,11 +130,11 @@ private struct RepositoryRowView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture(perform: onActivate)
-
+            
             if !repo.isBuiltIn {
                 Button(action: onEdit) {
                     Image(systemName: "pencil")
-                        .foregroundStyle(Color.secondary)
+                        .foregroundStyle(palette.secondaryText)
                         .imageScale(.small)
                 }
                 .buttonStyle(.plain)
@@ -163,7 +149,10 @@ private struct RepositoryRowView: View {
 struct EditRepositorySheet: View {
     @Bindable var model: SpamBlockerModel
     @Environment(\.dismiss) private var dismiss
-
+    @Environment(\.colorScheme) private var colorScheme
+    
+    private var palette: AppPalette { AppPalette(colorScheme: colorScheme) }
+    
     var body: some View {
         NavigationStack {
             Form {
@@ -177,7 +166,7 @@ struct EditRepositorySheet: View {
                     Text("Optional. Overrides the repository's own name in the UI.")
                         .font(.footnote)
                 }
-
+                
                 Section {
                     LabeledContent("URL") {
                         TextField("repo.json URL", text: $model.editURLInput)
@@ -187,13 +176,49 @@ struct EditRepositorySheet: View {
                             .keyboardType(.URL)
                             .onChange(of: model.editURLInput) { _, _ in
                                 if model.editTestPassed { model.editTestPassed = false }
+                                model.editTestMessage = nil
+                                model.resetEditRepositoryValidation()
                             }
                     }
                 } footer: {
                     Text("Test the URL before saving to confirm it hosts a valid signed repository.")
                         .font(.footnote)
                 }
-
+                
+                if model.editTestPassed && !model.editPendingKeyFingerprint.isEmpty {
+                    Section {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Signing Key", systemImage: "key")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            
+                            Text(model.editPendingKeyFingerprint.formattedAsFingerprintGroups())
+                                .font(.caption)
+                                .monospaced()
+                                .foregroundStyle(.primary)
+                            
+                            if model.editPendingKeyAlreadyTrusted {
+                                Label("Key is already trusted", systemImage: "checkmark.seal.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(palette.success)
+                            } else {
+                                Button {
+                                    model.trustEditPendingKey()
+                                } label: {
+                                    Label("Trust This Key", systemImage: "checkmark.seal")
+                                        .font(.caption)
+                                }
+                                .tint(palette.warning)
+                                
+                                Text("You must trust this key before the repository edit can be saved and synced.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                
                 Section {
                     Button(model.isTestingEditRepository ? "Testing…" : "Test URL") {
                         Task { await model.testEditRepositoryInput() }
@@ -202,16 +227,16 @@ struct EditRepositorySheet: View {
                         model.isTestingEditRepository ||
                         model.editURLInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     )
-
+                    
                     if let msg = model.editTestMessage {
                         Label {
                             Text(msg).font(.footnote)
                         } icon: {
                             Image(systemName: model.editTestPassed ? "checkmark.circle.fill" : "exclamationmark.circle")
-                                .foregroundStyle(model.editTestPassed ? .green : .orange)
+                                .foregroundStyle(model.editTestPassed ? palette.success : palette.warning)
                         }
                         .font(.footnote)
-                        .foregroundStyle(model.editTestPassed ? .green : .secondary)
+                        .foregroundStyle(model.editTestPassed ? palette.success : palette.secondaryText)
                     }
                 }
             }
@@ -227,13 +252,15 @@ struct EditRepositorySheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         Task {
-                            await model.saveEditedRepository()
-                            dismiss()
+                            if await model.saveEditedRepository() {
+                                dismiss()
+                            }
                         }
                     }
                     .disabled(
                         model.editURLInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                        !model.editTestPassed
+                        !model.editTestPassed ||
+                        (!model.editPendingKeyFingerprint.isEmpty && !model.editPendingKeyAlreadyTrusted)
                     )
                 }
             }

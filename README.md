@@ -1,14 +1,17 @@
 # SpamSniper
 
-SpamSniper is an iPhone call-blocking app that syncs curated spam blocklists, stores them in a shared local database, and feeds them into an iOS Call Directory extension for system-level blocking. It is designed to stay lightweight, repo-driven, and practical: choose blocklists, sync them locally, and let iOS handle matching calls.
+SpamSniper is an iPhone call-blocking app that syncs curated spam blocklists, stores them in a shared local database, merges them with your personal blocked numbers, and feeds the final result into an iOS Call Directory extension for system-level blocking. It is designed to stay lightweight, repo-driven, and practical: choose blocklists, add your own numbers when needed, and let iOS handle matching calls.
 
 ![SpamSniper app preview](assets/spamsniper-preview.png)
 
 ## Features
 
 - Syncs spam blocklists from a repository-backed catalog.
+- Remembers blocklist selections separately for each repository you activate.
+- Merges personal blocked numbers into the same final blocking feed used by the extension.
 - Stores blocklist data in a shared SQLite database.
 - Supports multiple blocklist selections.
+- Collapses duplicate repo + personal numbers into one final blocked entry.
 - Excludes saved contacts from blocking when Contacts access is granted.
 - Uses an iOS Call Directory extension for system-level blocking.
 - Verifies blocklist signatures before import.
@@ -50,8 +53,20 @@ xcodebuild -project SpamSniper/SpamSniper.xcodeproj \
 ## Usage Notes
 
 - The app can be explored in Simulator, but Call Directory status and blocking behavior should be validated on a real iPhone.
-- The app fetches repository metadata and blocklists, verifies signatures, and then refreshes the local shared database.
-- If Contacts permission is enabled, SpamSniper avoids blocking numbers already saved in the user’s contacts.
+- The app fetches repository metadata and blocklists, verifies signatures, refreshes the shared local database, and then merges synced numbers with personal entries before reloading the extension.
+- Each repository keeps its own saved blocklist selections, so switching sources restores the last valid selection set for that repository.
+- If Contacts permission is enabled, SpamSniper avoids blocking numbers already saved in the user’s contacts during repository sync imports. Personal entries are always honored because you added them intentionally.
+- Repository metadata and downloaded blocklist files are signature-verified before import. Personal entries are local user data, so they are not part of the signature-verification flow.
+
+## How Blocking Data Is Composed
+
+- Selected repository blocklists provide the synced shared database snapshot.
+- Repository selection state is stored per repository identity, so switching sources does not overwrite another repository’s saved choices.
+- Personal blocklist entries are merged into that snapshot on-device.
+- When the same phone number exists in both places, SpamSniper keeps one final blocked number and uses the personal notes/tags to enrich in-app search results.
+- Contacts already saved on the device are excluded from repository sync imports when Contacts access is granted. Personal entries remain active because they are explicit user choices.
+- Signature verification applies to repository metadata and downloaded blocklist files only; personal entries are local data and are not signed.
+- The Call Directory extension consumes only the final deduplicated phone-number set.
 
 ## License
 

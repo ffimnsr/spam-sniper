@@ -42,12 +42,24 @@ struct PersonalBlocklistEntry: Codable, Identifiable, Equatable {
     }
 }
 
+extension PersonalBlocklistEntry {
+    nonisolated static func == (lhs: PersonalBlocklistEntry, rhs: PersonalBlocklistEntry) -> Bool {
+        lhs.id == rhs.id
+        && lhs.phoneNumber == rhs.phoneNumber
+        && lhs.displayName == rhs.displayName
+        && lhs.notes == rhs.notes
+        && lhs.tags == rhs.tags
+        && lhs.createdAt == rhs.createdAt
+        && lhs.updatedAt == rhs.updatedAt
+    }
+}
+
 // MARK: - Store
 
 /// Manages the user's personal blocklist with iCloud Key-Value sync.
 ///
 /// Primary storage: `NSUbiquitousKeyValueStore` (iCloud KV).
-/// Local fallback: `UserDefaults` (same key) so it works without iCloud.
+/// Shared local fallback: app-group `UserDefaults` so the app and extension stay in sync without iCloud.
 /// Call `startObserving()` once per app launch to receive remote-change notifications.
 final class PersonalBlocklistStore {
     static let shared = PersonalBlocklistStore()
@@ -57,12 +69,32 @@ final class PersonalBlocklistStore {
     private let storeKey = "personalBlocklist.entries.v1"
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
-    private let iCloud = NSUbiquitousKeyValueStore.default
-    private let local = UserDefaults.standard
+    private let legacyLocal = UserDefaults.standard
+    /// `nil` when iCloud KV should not be touched (tests/extensions) or when iCloud is unavailable.
+    /// Access only via `iCloudStore` which checks availability lazily.
+    private lazy var iCloudStore: NSUbiquitousKeyValueStore? = {
+        // NSUbiquitousKeyValueStore.default will crash ("BUG IN CLIENT OF KVS")
+        // when the ubiquity-kvstore-identifier entitlement is missing. Unit tests and
+        // the Call Directory extension must use only the shared app-group fallback.
+        guard !Self.isRunningUnitTests,
+              !Self.isRunningInAppExtension,
+              FileManager.default.ubiquityIdentityToken != nil else {
+            return nil
+        }
+        return NSUbiquitousKeyValueStore.default
+    }()
+    private let local: UserDefaults = {
+        guard let sharedDefaults = UserDefaults(suiteName: SpamBlockerShared.appGroupIdentifier) else {
+            return .standard
+        }
+        return sharedDefaults
+    }()
+    private var isObserving = false
 
     private init() {
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601
+        migrateLegacyLocalEntriesIfNeeded()
     }
 
     // MARK: Public API
@@ -75,13 +107,16 @@ final class PersonalBlocklistStore {
 
     /// Begin listening for iCloud remote changes. Call once on app launch.
     func startObserving() {
+        guard let store = iCloudStore, !isObserving else { return }
+        isObserving = true
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(iCloudDidChange(_:)),
             name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
-            object: iCloud
+            object: store
         )
-        iCloud.synchronize()
+        store.synchronize()
+        mirrorICloudEntriesToLocalStore()
     }
 
     /// Add a new entry. Returns `false` if the number already exists.
@@ -129,7 +164,8 @@ final class PersonalBlocklistStore {
 
     private func load() -> [PersonalBlocklistEntry] {
         // Prefer iCloud KV; fall back to local UserDefaults
-        if let data = iCloud.data(forKey: storeKey),
+        if let store = iCloudStore,
+           let data = store.data(forKey: storeKey),
            let decoded = try? decoder.decode([PersonalBlocklistEntry].self, from: data) {
             return decoded
         }
@@ -142,14 +178,45 @@ final class PersonalBlocklistStore {
 
     private func save(_ entries: [PersonalBlocklistEntry]) {
         guard let data = try? encoder.encode(entries) else { return }
-        iCloud.set(data, forKey: storeKey)
+        if let store = iCloudStore {
+            store.set(data, forKey: storeKey)
+            store.synchronize()
+        }
         local.set(data, forKey: storeKey)
-        iCloud.synchronize()
     }
 
     @objc private func iCloudDidChange(_ notification: Notification) {
+        mirrorICloudEntriesToLocalStore()
         // Notify observers that the store changed so @Observable models can refresh.
         NotificationCenter.default.post(name: .personalBlocklistStoreDidChange, object: nil)
+    }
+
+    private func migrateLegacyLocalEntriesIfNeeded() {
+        guard local !== legacyLocal,
+              local.data(forKey: storeKey) == nil,
+              let legacyData = legacyLocal.data(forKey: storeKey) else {
+            return
+        }
+
+        local.set(legacyData, forKey: storeKey)
+    }
+
+    private func mirrorICloudEntriesToLocalStore() {
+        guard let store = iCloudStore else { return }
+
+        if let data = store.data(forKey: storeKey) {
+            local.set(data, forKey: storeKey)
+        } else {
+            local.removeObject(forKey: storeKey)
+        }
+    }
+
+    private static var isRunningUnitTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
+    private static var isRunningInAppExtension: Bool {
+        Bundle.main.infoDictionary?["NSExtension"] != nil
     }
 }
 

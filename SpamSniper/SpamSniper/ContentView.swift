@@ -9,11 +9,12 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                LazyVStack(alignment: .leading, spacing: 18) {
                     heroCard
-                    controlsCard
+                    quickActionsSection
                     statsRow
                     detailsCard
+                    syncResultCard
 
                     if let errorMessage = model.errorMessage {
                         errorCard(message: errorMessage)
@@ -21,22 +22,44 @@ struct ContentView: View {
 
                     aboutEntryCard
                 }
-                .padding(20)
-                .padding(.bottom, 104)
+                .padding(.horizontal, 18)
+                .padding(.top, 14)
+                .padding(.bottom, 18)
             }
+            .scrollIndicators(.hidden)
             .background(backgroundGradient)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 2) {
+                        Text("SpamSniper")
+                            .font(.headline.weight(.bold))
+                        Text(model.isBlockingEnabled ? "Protection on" : "Protection paused")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 stickyProtectionBar
             }
             .task {
+                guard !AppRuntime.isRunningTests else { return }
                 await model.refresh()
             }
             .onChange(of: scenePhase) { _, newPhase in
+                guard !AppRuntime.isRunningTests else { return }
                 guard newPhase == .active else { return }
 
                 Task {
                     await model.refresh()
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .personalBlocklistStoreDidChange)) { _ in
+                guard !AppRuntime.isRunningTests else { return }
+                Task {
+                    await model.processPersonalBlocklistChange()
                 }
             }
         }

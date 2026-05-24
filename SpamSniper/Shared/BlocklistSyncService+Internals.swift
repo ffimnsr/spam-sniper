@@ -11,10 +11,11 @@ extension BlocklistSyncService {
     }
 
     static var activeRepository: StoredRepository {
-        if let activeURL = SpamBlockerShared.activeRepositoryURL {
-            return SpamBlockerShared.repositories.first(where: { $0.urlString == activeURL.absoluteString })
-                ?? StoredRepository(validatedURL: activeURL, repoName: activeURL.absoluteString)
+        if let activeRepositoryID = SpamBlockerShared.activeRepositoryID,
+           let repository = SpamBlockerShared.repositories.first(where: { $0.id == activeRepositoryID }) {
+            return repository
         }
+
         return StoredRepository.builtIn
     }
 
@@ -32,19 +33,19 @@ extension BlocklistSyncService {
 
     static func setActiveRepository(_ repo: StoredRepository) {
         SpamBlockerShared.setActiveRepository(repo.isBuiltIn ? nil : repo)
-        SpamBlockerShared.selectedBlocklists = []
     }
 
     static func resolveSelections(in repository: BlocklistRepositoryDocument) throws -> [StoredBlocklistSelection] {
         let catalog = repository.catalogEntries(relativeTo: repositoryURL)
+        let repositoryID = activeRepository.id
 
-        let storedSelections = SpamBlockerShared.selectedBlocklists
+        let storedSelections = SpamBlockerShared.selectedBlocklists(forRepositoryID: repositoryID)
         let refreshedSelections = storedSelections.compactMap { storedSelection in
             catalog.first(where: { $0.id == storedSelection.id }).map(StoredBlocklistSelection.init(entry:))
         }
 
         if !refreshedSelections.isEmpty {
-            SpamBlockerShared.selectedBlocklists = refreshedSelections
+            SpamBlockerShared.setSelectedBlocklists(refreshedSelections, forRepositoryID: repositoryID)
             return refreshedSelections
         }
 
@@ -55,12 +56,15 @@ extension BlocklistSyncService {
         }
 
         let selection = StoredBlocklistSelection(entry: try firstAvailableEntry(defaultEntry, catalog: catalog))
-        SpamBlockerShared.selectedBlocklists = [selection]
+        SpamBlockerShared.setSelectedBlocklists([selection], forRepositoryID: repositoryID)
         return [selection]
     }
 
     static func updateSelectedBlocklists(to entries: [BlocklistCatalogEntry]) {
-        SpamBlockerShared.selectedBlocklists = entries.map(StoredBlocklistSelection.init(entry:))
+        SpamBlockerShared.setSelectedBlocklists(
+            entries.map(StoredBlocklistSelection.init(entry:)),
+            forRepositoryID: activeRepository.id
+        )
     }
 
     static func githubRepositoryURL(owner: String, repo: String) throws -> URL {
@@ -76,7 +80,7 @@ extension BlocklistSyncService {
             URL(string: "https://raw.githubusercontent.com/\(owner)/\(repo)/main/blocklist/repo.json"),
             URL(string: "https://raw.githubusercontent.com/\(owner)/\(repo)/master/blocklist/repo.json")
         ]
-        .compactMap { $0 }
+            .compactMap { $0 }
     }
 
     static func resolvedRepositoryURLForValidation(from input: String) async throws -> URL {
@@ -99,7 +103,7 @@ extension BlocklistSyncService {
         if !githubCandidates.isEmpty {
             for candidate in githubCandidates {
                 do {
-                    _ = try await fetchVerifiedRepositoryContext(from: candidate)
+                    _ = try await fetchVerifiedRepositoryContext(from: candidate, requireTrust: false)
                     return candidate
                 } catch {
                     continue
@@ -147,6 +151,14 @@ extension BlocklistSyncService {
     }
 
     static func fetchVerifiedRepositoryContext(from repositoryURL: URL) async throws -> RepositoryContext {
+        try await fetchVerifiedRepositoryContext(from: repositoryURL, requireTrust: true)
+    }
+
+    /// `requireTrust = false` is used during validation so the user can inspect the key before trusting it.
+    static func fetchVerifiedRepositoryContext(
+        from repositoryURL: URL,
+        requireTrust: Bool
+    ) async throws -> RepositoryContext {
         let data = try await fetchRemoteData(from: repositoryURL)
         let signatureData = try await fetchRemoteData(from: repositoryURL.appendingPathExtension("asc"))
 
@@ -157,39 +169,47 @@ extension BlocklistSyncService {
             throw BlocklistSyncServiceError.repositoryMetadataInvalid
         }
 
-        guard let publicKeyURL = resolvedRepositoryKeyURL(from: untrustedDocument, repositoryURL: repositoryURL) else {
+        guard let publicKeyURL = untrustedDocument.resolvedRepositoryPublicKeyURL(relativeTo: repositoryURL) else {
             throw BlocklistSyncServiceError.repositoryKeyUnavailable
         }
 
         let publicKeyData = try await fetchRemoteData(from: publicKeyURL)
 
+        // Extract fingerprint
+        let fingerprint: String
         do {
-            try BlocklistSignatureVerifier.verifyDetachedSignature(
-                signedData: data,
-                signatureData: signatureData,
-                publicKeyData: publicKeyData
-            )
+            fingerprint = try BlocklistSignatureVerifier.fingerprint(of: publicKeyData)
         } catch {
             throw BlocklistSyncServiceError.repositorySignatureInvalid
         }
 
-        return RepositoryContext(document: untrustedDocument, publicKeyData: publicKeyData)
-    }
-
-    static func resolvedRepositoryKeyURL(
-        from repository: BlocklistRepositoryDocument,
-        repositoryURL: URL
-    ) -> URL? {
-        guard let value = repository.gpgKeyURL?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !value.isEmpty else {
-            return nil
+        let isBuiltInURL = repositoryURL.absoluteString == defaultRepositoryURL?.absoluteString
+        if isBuiltInURL {
+            do {
+                try BlocklistSignatureVerifier.verifyDetachedSignature(signedData: data, signatureData: signatureData)
+            } catch {
+                throw BlocklistSyncServiceError.repositorySignatureInvalid
+            }
+        } else {
+            if requireTrust && !SpamBlockerShared.isTrusted(fingerprint: fingerprint) {
+                throw BlocklistSyncServiceError.repositoryKeyUntrusted
+            }
+            do {
+                try BlocklistSignatureVerifier.verifyDetachedSignature(
+                    signedData: data,
+                    signatureData: signatureData,
+                    publicKeyData: publicKeyData
+                )
+            } catch {
+                throw BlocklistSyncServiceError.repositorySignatureInvalid
+            }
         }
 
-        if let absoluteURL = URL(string: value), absoluteURL.scheme != nil {
-            return absoluteURL
-        }
-
-        return repositoryURL.deletingLastPathComponent().appending(path: value)
+        return RepositoryContext(
+            document: untrustedDocument,
+            publicKeyData: publicKeyData,
+            publicKeyFingerprint: fingerprint
+        )
     }
 
     static func shouldRefresh(summary: BlocklistDatabaseSummary, selectedBlocklistIDs: [String]) -> Bool {
@@ -299,4 +319,8 @@ extension BlocklistSyncService {
 struct RepositoryContext {
     let document: BlocklistRepositoryDocument
     let publicKeyData: Data
+    let publicKeyFingerprint: String
+    var publicKeyArmoredData: String {
+        String(data: publicKeyData, encoding: .utf8) ?? String(data: publicKeyData, encoding: .ascii) ?? ""
+    }
 }

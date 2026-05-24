@@ -4,6 +4,8 @@ struct BlocklistSelectionView: View {
     @Bindable var model: SpamBlockerModel
     @Environment(\.colorScheme) private var colorScheme
 
+    private var palette: AppPalette { AppPalette(colorScheme: colorScheme) }
+
     var body: some View {
         List {
             Section {
@@ -13,6 +15,9 @@ struct BlocklistSelectionView: View {
                         .foregroundStyle(.secondary)
                     Text(model.selectedBlocklistTitle)
                         .font(.headline)
+                    Text("Selections are remembered for the active repository.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     if !model.selectedBlocklistCountry.isEmpty {
                         Text(model.selectedBlocklistCountry)
                             .font(.subheadline)
@@ -27,10 +32,10 @@ struct BlocklistSelectionView: View {
 
             ForEach(model.availableBlocklists) { country in
                 Section(country.name + " (\(country.code))") {
-                    ForEach(country.blocklists, id: \.id) { entry in
+                    ForEach(country.blocklists) { entry in
                         Button {
                             Task {
-                                await model.toggleBlocklistSelection(catalogEntry(for: entry, country: country))
+                                await model.toggleBlocklistSelection(entry)
                             }
                         } label: {
                             HStack(alignment: .top, spacing: 12) {
@@ -50,14 +55,14 @@ struct BlocklistSelectionView: View {
 
                                 Image(
                                     systemName: model.selectedBlocklistIDs.contains(entry.id)
-                                        ? "checkmark.circle.fill"
-                                        : "circle"
+                                    ? "checkmark.circle.fill"
+                                    : "circle"
                                 )
-                                    .foregroundStyle(
-                                        model.selectedBlocklistIDs.contains(entry.id)
-                                            ? selectionTint
-                                            : .secondary
-                                    )
+                                .foregroundStyle(
+                                    model.selectedBlocklistIDs.contains(entry.id)
+                                    ? palette.tint
+                                    : palette.secondaryText
+                                )
                             }
                             .padding(.vertical, 6)
                         }
@@ -74,50 +79,6 @@ struct BlocklistSelectionView: View {
                     .padding(20)
                     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
-        }
-    }
-
-    private func catalogEntry(
-        for entry: BlocklistRepositoryEntry,
-        country: BlocklistRepositoryCountry
-    ) -> BlocklistCatalogEntry {
-        let documentURL = BlocklistSyncService.repositoryURL?
-            .deletingLastPathComponent()
-            .appending(path: entry.path)
-
-        let signatureURL: URL? = {
-            let value = entry.signatureURL ?? country.signatureURL
-            guard let value else {
-                return nil
-            }
-
-            if let absoluteURL = URL(string: value), absoluteURL.scheme != nil {
-                return absoluteURL
-            }
-
-            return BlocklistSyncService.repositoryURL?
-                .deletingLastPathComponent()
-                .appending(path: value)
-        }()
-
-        return BlocklistCatalogEntry(
-            id: entry.id,
-            countryCode: country.code,
-            countryName: country.name,
-            title: entry.title,
-            description: entry.description,
-            source: entry.source,
-            documentURL: documentURL,
-            signatureURL: signatureURL
-        )
-    }
-
-    private var selectionTint: Color {
-        switch colorScheme {
-        case .dark:
-            return Color(red: 0.38, green: 0.84, blue: 0.86)
-        default:
-            return Color(red: 0.04, green: 0.46, blue: 0.54)
         }
     }
 }

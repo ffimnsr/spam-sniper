@@ -12,6 +12,8 @@ import UIKit
 @MainActor
 @Observable
 final class SpamBlockerModel {
+    static let defaultNumberSearchMessage = "Search the numbers currently included in SpamSniper’s blocking feed."
+
     enum ExtensionStatus: String {
         case enabled
         case disabled
@@ -46,12 +48,14 @@ final class SpamBlockerModel {
     var selectedBlocklistCountry = ""
     var blocklistSignatureStatus = "Checking"
     var lastSyncDescription = "Not synced yet"
-    var availableBlocklists: [BlocklistRepositoryCountry] = []
+    var availableBlocklists: [ResolvedBlocklistRepositoryCountry] = []
     var contactsStatusDescription = ContactFilterSnapshot.PermissionState.notDetermined.description
     var isBusy = false
     var isRefreshingBlocklists = false
+    var isManualSyncInProgress = false
     var isTestingRepository = false
     var errorMessage: String?
+    var lastManualSyncStatus: ManualSyncStatus?
     var repositoryInput = ""
     var repositoryNameInput = ""
     var repositoryTestMessage: String?
@@ -71,6 +75,20 @@ final class SpamBlockerModel {
     var editTestMessage: String?
     var editTestPassed: Bool = false
     var isTestingEditRepository: Bool = false
+    var editValidatedRepositoryURL: URL?
+    var editValidatedRepoMetaName: String = ""
+    var editPendingKeyFingerprint: String = ""
+    var editPendingKeyArmoredData: String = ""
+    var editPendingKeyAlreadyTrusted: Bool = false
+
+    // MARK: - Trusted Keys
+    var trustedKeys: [TrustedKey] = SpamBlockerShared.trustedKeys
+    /// Pending key fingerprint from the most recent successful repo test.
+    var pendingKeyFingerprint: String = ""
+    /// Pending armored key data from the most recent successful repo test.
+    var pendingKeyArmoredData: String = ""
+    /// Whether the pending key is already in the trusted store.
+    var pendingKeyAlreadyTrusted: Bool = false
     var numberSearchQuery = ""
     var numberSearchResults: [BlockedNumberSearchResult] = []
     var isSearchingNumbers = false
@@ -89,44 +107,40 @@ final class SpamBlockerModel {
     }
 
     func refresh() async {
-        SpamBlockerShared.registerDefaults()
-        isBlockingEnabled = SpamBlockerShared.isEnabled
-        contactsPermissionState = ContactFilteringService.currentPermissionState()
-        contactsStatusDescription = contactsPermissionState.description
-        // Sync multi-repo state
-        repositories = [.builtIn] + BlocklistSyncService.repositories
-        activeRepositoryID = BlocklistSyncService.activeRepository.id
+        refreshStoredState()
+        applyCachedEffectiveSnapshotIfAvailable()
 
         do {
-            let repository = try await BlocklistSyncService.fetchRepository()
-            let selections = applyRepository(repository)
-            await updateSignatureStatus(for: selections)
-            let snapshot = try BlocklistSyncService.fetchSnapshot()
-            applySnapshot(snapshot)
-        } catch {
-            errorMessage = userFacingMessage(for: error)
-        }
-
-        do {
-            let shouldExcludeContacts = contactsPermissionState == .authorized || contactsPermissionState == .limited
-            let contactNumbers = if shouldExcludeContacts {
-                await ContactFilteringService.loadSnapshot().phoneNumbers
-            } else {
-                Set<Int64>()
-            }
-
-            let repository = try await BlocklistSyncService.fetchRepository()
-            let selections = applyRepository(repository)
-            await updateSignatureStatus(for: selections)
-            let summary = try await BlocklistSyncService.refreshIfNeeded(excluding: contactNumbers)
-            let snapshot = try BlocklistSyncService.fetchSnapshot()
-            applySummary(summary, snapshot: snapshot)
-            try? await reloadExtension()
-            extensionStatus = try await fetchExtensionStatus()
+            let result = try await coordinatedRefresh(forceSync: false)
+            applyRefreshResult(result)
             errorMessage = nil
         } catch {
             extensionStatus = fallbackExtensionStatus(for: error)
             errorMessage = userFacingMessage(for: error)
+        }
+    }
+
+    func syncNow() async {
+        guard !isManualSyncInProgress else { return }
+
+        isManualSyncInProgress = true
+        defer { isManualSyncInProgress = false }
+
+        refreshStoredState()
+        applyCachedEffectiveSnapshotIfAvailable()
+
+        do {
+            let result = try await coordinatedRefresh(forceSync: true)
+            applyRefreshResult(result)
+
+            let syncStatus = manualSyncStatus(for: result)
+            lastManualSyncStatus = syncStatus
+            errorMessage = syncStatus.style == .failure ? syncStatus.message : nil
+        } catch {
+            extensionStatus = fallbackExtensionStatus(for: error)
+            let message = userFacingMessage(for: error)
+            errorMessage = message
+            lastManualSyncStatus = manualSyncStatus(for: error, fallbackMessage: message)
         }
     }
 
@@ -158,21 +172,12 @@ final class SpamBlockerModel {
         errorMessage = nil
 
         let repositoryEntries = flattenedRepositoryEntries()
+        let nextSelections = selectionsAfterToggling(entry, in: repositoryEntries)
+        let storedSelections = storedSelections(for: nextSelections)
 
-        var nextSelections = repositoryEntries.filter { selectedBlocklistIDs.contains($0.id) }
-
-        if selectedBlocklistIDs.contains(entry.id) {
-            if nextSelections.count > 1 {
-                nextSelections.removeAll { $0.id == entry.id }
-            }
-        } else {
-            nextSelections.append(entry)
-        }
-
-        nextSelections.sort { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         BlocklistSyncService.updateSelectedBlocklists(to: nextSelections)
-        applySelections(nextSelections.map(StoredBlocklistSelection.init(entry:)))
-        await updateSignatureStatus(for: nextSelections.map(StoredBlocklistSelection.init(entry:)))
+        applySelections(storedSelections)
+        await updateSignatureStatus(for: storedSelections)
 
         do {
             try await syncSelections(nextSelections)

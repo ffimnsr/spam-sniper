@@ -7,8 +7,20 @@ import SwiftUI
 
 extension ContentView {
     var backgroundGradient: some View {
-        LinearGradient(colors: theme.pageBackground, startPoint: .top, endPoint: .bottom)
-            .ignoresSafeArea()
+        ZStack {
+            LinearGradient(colors: theme.pageBackground, startPoint: .topLeading, endPoint: .bottomTrailing)
+            Circle()
+                .fill(theme.ambientGlow.first ?? .clear)
+                .frame(width: 280, height: 280)
+                .blur(radius: 52)
+                .offset(x: -150, y: -250)
+            Circle()
+                .fill(theme.ambientGlow.dropFirst().first ?? .clear)
+                .frame(width: 260, height: 260)
+                .blur(radius: 58)
+                .offset(x: 180, y: 160)
+        }
+        .ignoresSafeArea()
     }
 
     var statusTitle: String {
@@ -38,7 +50,7 @@ extension ContentView {
     }
 
     var callBlockingSettingsTitle: String {
-        model.extensionStatus == .enabled ? "Manage Call Blocking Settings" : "Open Call Blocking Settings"
+        model.extensionStatus == .enabled ? "Call Blocking" : "Call Blocking Setup"
     }
 
     var protectionButtonTitle: String {
@@ -52,7 +64,7 @@ extension ContentView {
 
         switch model.extensionStatus {
         case .enabled:
-            return "Calls matching any synced blocklist can be blocked by iOS."
+            return "Calls matching synced blocklists or your personal list can be blocked by iOS."
         case .disabled:
             return "Turn on the Call Blocking extension in Settings for full protection."
         case .unknown:
@@ -69,7 +81,7 @@ extension ContentView {
     var signatureStatusColor: Color {
         switch model.blocklistSignatureStatus {
         case "Good":
-            return .green
+            return theme.success
         case "Checking":
             return .secondary
         default:
@@ -80,7 +92,7 @@ extension ContentView {
     var signatureStatusBackground: Color {
         switch model.blocklistSignatureStatus {
         case "Good":
-            return Color.green.opacity(colorScheme == .dark ? 0.24 : 0.12)
+            return theme.success.opacity(colorScheme == .dark ? 0.22 : 0.12)
         case "Checking":
             return Color.secondary.opacity(0.14)
         default:
@@ -89,31 +101,45 @@ extension ContentView {
     }
 
     var sourceSummary: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Source")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.secondary)
-            Text(model.blocklistSource)
-                .font(.subheadline.weight(.semibold))
-            Text("Last synced \(model.lastSyncDescription).")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "externaldrive.connected.to.line.below.fill")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(theme.tint)
+                .frame(width: 36, height: 36)
+                .background(theme.tintSoft, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Source")
+                    .font(.caption.weight(.black))
+                    .foregroundStyle(.secondary)
+                Text(model.blocklistSource)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Text("Last synced \(model.lastSyncDescription).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
     var signatureSummary: some View {
-        HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "signature")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(signatureStatusColor)
+                .frame(width: 36, height: 36)
+                .background(signatureStatusBackground, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            VStack(alignment: .leading, spacing: 5) {
                 Text("Signature")
-                    .font(.caption.weight(.bold))
+                    .font(.caption.weight(.black))
                     .foregroundStyle(.secondary)
-                Text("Blocklist signature availability")
-                    .font(.footnote)
+                Text("Blocklist trust verification")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Spacer(minLength: 16)
+            Spacer(minLength: 12)
             Text(model.blocklistSignatureStatus)
-                .font(.caption.weight(.bold))
+                .font(.caption.weight(.black))
                 .foregroundStyle(signatureStatusColor)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
@@ -123,18 +149,17 @@ extension ContentView {
 
     func detailPanel<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         content()
-            .padding(18)
-            .background(theme.secondarySurface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .panelStyle(cornerRadius: 24)
     }
 
     var contactsActionTitle: String {
         switch model.contactsPermissionState {
         case .notDetermined:
-            return "Allow Contacts Protection"
+            return "Contacts Protection"
         case .authorized, .limited:
-            return "Manage Shared Contacts"
+            return "Shared Contacts"
         case .denied, .restricted:
-            return "Open Contacts Settings"
+            return "Contacts Settings"
         }
     }
 
@@ -156,11 +181,7 @@ extension ContentView {
                 await model.requestContactsAccess()
             }
         case .authorized, .limited:
-            if #available(iOS 18.0, *) {
-                isContactAccessPickerPresented = true
-            } else {
-                model.openAppSettings()
-            }
+            isContactAccessPickerPresented = true
         case .denied, .restricted:
             model.openAppSettings()
         }
@@ -170,8 +191,51 @@ extension ContentView {
         model.isBlockingEnabled ? theme.tint : theme.neutralAccent
     }
 
-    var theme: ThemePalette {
-        ThemePalette(colorScheme: colorScheme)
+    var syncNowDetail: String {
+        if model.isManualSyncInProgress {
+            return "Refreshing repository data and reloading the extension."
+        }
+
+        return model.lastManualSyncStatus?.message
+        ?? "Fetch repository metadata, rebuild the blocking feed, and reload Call Blocking."
+    }
+
+    var syncResultTint: Color {
+        guard let status = model.lastManualSyncStatus else {
+            return theme.tint
+        }
+
+        switch status.style {
+        case .success:
+            return theme.success
+        case .warning:
+            return theme.warning
+        case .failure:
+            return theme.destructive
+        }
+    }
+
+    var syncResultBackground: Color {
+        syncResultTint.opacity(colorScheme == .dark ? 0.22 : 0.12)
+    }
+
+    var syncResultSymbol: String {
+        guard let status = model.lastManualSyncStatus else {
+            return "arrow.triangle.2.circlepath.circle.fill"
+        }
+
+        switch status.style {
+        case .success:
+            return "checkmark.circle.fill"
+        case .warning:
+            return "exclamationmark.triangle.fill"
+        case .failure:
+            return "xmark.octagon.fill"
+        }
+    }
+
+    var theme: AppPalette {
+        AppPalette(colorScheme: colorScheme)
     }
 
     var contactsFilteringDescription: String {
@@ -184,7 +248,7 @@ extension ContentView {
     var repoDrivenDescription: String {
         """
         SpamSniper reads a repo index, lets you choose country-specific lists,
-        and imports their JSON entries into the shared SQLite database.
+        and merges synced entries with your personal list before building the final blocking feed.
         """
     }
 
