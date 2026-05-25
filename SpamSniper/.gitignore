@@ -10,7 +10,9 @@ DerivedData/
 # Swift Package Manager
 .build/
 Packages/
+# Keep the shared Xcode resolution file committed for Xcode Cloud builds.
 Package.resolved
+!SpamSniper.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # CocoaPods / Carthage
 Pods/
