@@ -2,3 +2,4 @@
 .codex-venv/
 blocklist/.DS_Store
 blocklist/.gnupg/
+.venv/

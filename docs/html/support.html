@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Support</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page-bg: #dfeaf7;
+      --page-tint-a: rgba(137, 196, 255, 0.3);
+      --page-tint-b: rgba(255, 255, 255, 0.82);
+      --glass-bg: rgba(255, 255, 255, 0.5);
+      --glass-strong: rgba(255, 255, 255, 0.68);
+      --glass-border: rgba(255, 255, 255, 0.52);
+      --glass-shadow: 0 30px 80px rgba(64, 98, 142, 0.18);
+      --hero-shadow: 0 24px 60px rgba(52, 85, 128, 0.2);
+      --text-main: #13233a;
+      --text-muted: rgba(19, 35, 58, 0.72);
+      --text-subtle: rgba(19, 35, 58, 0.56);
+      --text-inverse: #f8fbff;
+      --link: #0b66c3;
+      --link-hover: #004e9e;
+      --rule: rgba(111, 142, 184, 0.18);
+      --radius-2xl: 34px;
+      --radius-xl: 28px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --font-ui: "SF Pro Display", "SF Pro Text", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      position: relative;
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.96), transparent 26%),
+        radial-gradient(circle at 86% 16%, rgba(122, 182, 255, 0.34), transparent 24%),
+        radial-gradient(circle at 50% 100%, rgba(195, 223, 255, 0.52), transparent 38%),
+        linear-gradient(180deg, #edf5ff 0%, var(--page-bg) 100%);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    body::before,
+    body::after {
+      content: "";
+      position: fixed;
+      inset: auto;
+      pointer-events: none;
+      z-index: 0;
+      border-radius: 50%;
+      filter: blur(32px);
+    }
+
+    body::before {
+      top: 72px;
+      right: 8vw;
+      width: 260px;
+      height: 260px;
+      background: rgba(255, 255, 255, 0.55);
+    }
+
+    body::after {
+      left: 6vw;
+      bottom: 7vh;
+      width: 320px;
+      height: 320px;
+      background: rgba(136, 188, 255, 0.22);
+    }
+
+    a {
+      color: var(--link);
+      text-decoration: none;
+    }
+
+    a:hover {
+      color: var(--link-hover);
+    }
+
+    .shell {
+      width: min(1100px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 56px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding: 14px 16px 14px 20px;
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.74) 0%, rgba(255, 255, 255, 0.44) 100%);
+      backdrop-filter: blur(26px) saturate(155%);
+      -webkit-backdrop-filter: blur(26px) saturate(155%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.82),
+        0 18px 40px rgba(57, 90, 132, 0.1);
+    }
+
+    .brand {
+      font-family: var(--font-ui);
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .home-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0.7rem 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.46);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.42);
+      backdrop-filter: blur(16px) saturate(160%);
+      -webkit-backdrop-filter: blur(16px) saturate(160%);
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--link);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    }
+
+    .hero {
+      position: relative;
+      padding: 38px clamp(24px, 4vw, 48px) 30px;
+      color: var(--text-main);
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 28%),
+        radial-gradient(circle at 88% 20%, rgba(130, 189, 255, 0.42), transparent 24%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(241, 248, 255, 0.62) 100%);
+      backdrop-filter: blur(24px) saturate(155%);
+      -webkit-backdrop-filter: blur(24px) saturate(155%);
+      box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.48);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      top: -56px;
+      right: -20px;
+      width: 230px;
+      height: 230px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.14) 48%, transparent 70%);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.7),
+        0 24px 40px rgba(113, 161, 224, 0.14);
+      filter: blur(0.2px);
+      opacity: 0.95;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      bottom: 18px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(135, 171, 217, 0.42), transparent);
+    }
+
+    .eyebrow {
+      position: relative;
+      z-index: 1;
+      margin: 0 0 12px;
+      font-family: var(--font-ui);
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-subtle);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0.55rem 0.85rem;
+      border: 1px solid rgba(255, 255, 255, 0.52);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.44);
+      backdrop-filter: blur(14px) saturate(145%);
+      -webkit-backdrop-filter: blur(14px) saturate(145%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, #79bcff 0%, #2d89ff 100%);
+      box-shadow: 0 0 12px rgba(45, 137, 255, 0.42);
+    }
+
+    h1 {
+      position: relative;
+      z-index: 1;
+      margin: 0;
+      max-width: 12ch;
+      font-family: var(--font-ui);
+      font-size: clamp(2.55rem, 6vw, 4.6rem);
+      line-height: 0.92;
+      letter-spacing: -0.06em;
+      font-weight: 700;
+    }
+
+    .lede {
+      position: relative;
+      z-index: 1;
+      max-width: 40rem;
+      margin: 16px 0 0;
+      color: var(--text-muted);
+      font-size: 1.02rem;
+    }
+
+    .content {
+      padding: 28px clamp(24px, 4vw, 48px) 48px;
+    }
+
+    .panel {
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-2xl);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(248, 251, 255, 0.58) 100%);
+      backdrop-filter: blur(28px) saturate(155%);
+      -webkit-backdrop-filter: blur(28px) saturate(155%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.86),
+        var(--glass-shadow);
+      overflow: hidden;
+    }
+
+    .article {
+      max-width: 780px;
+      margin: 0 auto;
+      animation: fade-up 440ms ease both;
+    }
+
+    .article > :first-child {
+      margin-top: 0;
+    }
+
+    .article h2,
+    .article h3,
+    .article h4 {
+      margin-top: 2.6rem;
+      margin-bottom: 0.8rem;
+      font-family: var(--font-ui);
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    .article h2 {
+      font-size: clamp(1.7rem, 3vw, 2.25rem);
+    }
+
+    .article h3 {
+      font-size: 1.3rem;
+    }
+
+    .article p,
+    .article li,
+    .article blockquote {
+      color: var(--text-main);
+      font-size: 1rem;
+    }
+
+    .article ul,
+    .article ol {
+      padding-left: 1.3rem;
+    }
+
+    .article li + li {
+      margin-top: 0.45rem;
+    }
+
+    .article code {
+      padding: 0.12rem 0.38rem;
+      border-radius: 9px;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid rgba(127, 160, 201, 0.2);
+      color: #0f5aab;
+      font-size: 0.92em;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    .article pre {
+      overflow-x: auto;
+      padding: 1.1rem 1.2rem;
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(180deg, rgba(10, 24, 44, 0.92) 0%, rgba(19, 37, 62, 0.92) 100%);
+      color: #f5fbff;
+      border: 1px solid rgba(177, 205, 239, 0.12);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .article pre code {
+      padding: 0;
+      background: transparent;
+      color: inherit;
+    }
+
+    .article blockquote {
+      margin: 1.8rem 0;
+      padding: 1rem 1.1rem 1rem 1.15rem;
+      border: 1px solid rgba(255, 255, 255, 0.54);
+      border-left: 3px solid rgba(11, 102, 195, 0.3);
+      border-radius: var(--radius-md);
+      background: rgba(255, 255, 255, 0.38);
+      backdrop-filter: blur(16px);
+      color: var(--text-muted);
+    }
+
+    .article table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+      font-size: 0.98rem;
+    }
+
+    .article th,
+    .article td {
+      padding: 0.85rem 0.9rem;
+      border-bottom: 1px solid var(--rule);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .article hr {
+      border: 0;
+      border-top: 1px solid var(--rule);
+      margin: 2rem 0;
+    }
+
+    .index-intro {
+      margin-bottom: 1.5rem;
+      padding: 1.35rem 1.4rem;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.62) 0%, rgba(246, 250, 255, 0.5) 100%);
+      backdrop-filter: blur(18px) saturate(150%);
+      -webkit-backdrop-filter: blur(18px) saturate(150%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
+    }
+
+    .index-intro p {
+      margin: 0;
+      color: var(--text-muted);
+    }
+
+    .index-intro strong {
+      display: block;
+      margin-bottom: 0.4rem;
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      font-size: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .index-grid,
+    .doc-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .index-grid {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .doc-card {
+      display: block;
+      padding: 1.2rem 1.2rem 1.1rem;
+      border: 1px solid rgba(255, 255, 255, 0.56);
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(245, 249, 255, 0.56) 100%);
+      backdrop-filter: blur(18px) saturate(150%);
+      -webkit-backdrop-filter: blur(18px) saturate(150%);
+      transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    }
+
+    .doc-card:hover {
+      transform: translateY(-3px) scale(1.01);
+      border-color: rgba(255, 255, 255, 0.78);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(246, 251, 255, 0.66) 100%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.92),
+        0 18px 34px rgba(76, 113, 160, 0.12);
+    }
+
+    .doc-card__label,
+    .doc-card__meta,
+    .doc-card__description {
+      display: block;
+    }
+
+    .doc-card__label {
+      font-family: var(--font-ui);
+      font-size: 1.02rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--text-main);
+    }
+
+    .doc-card__description {
+      margin-top: 0.45rem;
+      color: var(--text-muted);
+      font-size: 0.94rem;
+      line-height: 1.55;
+    }
+
+    .doc-card__meta {
+      margin-top: 0.75rem;
+      color: var(--text-subtle);
+      font-family: var(--font-ui);
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .footer {
+      padding: 20px 6px 0;
+      color: var(--text-subtle);
+      font-family: var(--font-ui);
+      font-size: 0.88rem;
+      text-align: center;
+    }
+
+    @keyframes fade-up {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(100vw - 20px, 1120px);
+        padding-top: 10px;
+      }
+
+      .topbar {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .home-link {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .hero {
+        padding-top: 28px;
+      }
+
+      h1 {
+        max-width: none;
+        font-size: clamp(2.2rem, 12vw, 3.2rem);
+      }
+
+      .content {
+        padding-bottom: 32px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">Spam Sniper Documentation</div>
+      <a class="home-link" href="index.html">Browse all docs</a>
+    </div>
+
+    <main class="panel">
+      <section class="hero">
+        <p class="eyebrow">Help</p>
+        <h1>Support</h1>
+        <p class="lede">How to report issues, what details to include, and the first checks to make when call blocking is not behaving as expected.</p>
+      </section>
+
+      <section class="content">
+        <article class="article">
+          <h1>Support</h1>
+<p>If you need help with SpamSniper, the best place to reach the project is the GitHub issue tracker.</p>
+<h2>Before You Open an Issue</h2>
+<p>Check the basics first:</p>
+<ul>
+<li>confirm that <code>Settings &gt; Phone &gt; Call Blocking &amp; Identification</code> has SpamSniper enabled</li>
+<li>refresh the selected blocklists in the app</li>
+<li>reopen the app after changing repository or blocklist selections</li>
+<li>if you use Contacts filtering, verify that Contacts access is still allowed</li>
+</ul>
+<h2>Report an Issue</h2>
+<p>Open a GitHub issue in this repository with:</p>
+<ul>
+<li>a short summary of the problem</li>
+<li>what you expected to happen</li>
+<li>the steps needed to reproduce it</li>
+<li>your device model and iOS version</li>
+<li>screenshots, logs, or error messages if you have them</li>
+</ul>
+<h2>Request Help</h2>
+<p>For setup questions or feature requests, describe what you are trying to do and where the workflow breaks down.</p>
+<h2>Troubleshooting</h2>
+<ul>
+<li>If call blocking is not working, make sure the Call Directory extension is enabled and the latest local blocklist has been loaded.</li>
+<li>If a repository sync fails, try again later and include the repository URL or repository name in your issue report.</li>
+<li>If a number should not have been blocked, mention whether it came from a synced blocklist or from your personal list.</li>
+</ul>
+<h2>Privacy &amp; Data</h2>
+<p>SpamSniper keeps personal blocklist entries on-device. Repository blocklists are downloaded from the selected source, verified, and merged locally before being handed off to iOS for blocking.</p>
+<h2>Contact</h2>
+<p>Open an issue here:</p>
+<ul>
+<li>https://github.com/ffimnsr/spam-sniper/issues</li>
+</ul>
+        </article>
+      </section>
+    </main>
+
+    <footer class="footer">SpamSniper documentation</footer>
+  </div>
+</body>
+</html>

@@ -1,20 +1,38 @@
 # Terms of Use
 
-By using SpamSniper, you agree to the following terms:
+By using SpamSniper, you agree to the following terms.
 
-- SpamSniper is provided "as is" without warranties of any kind.
-- The app is intended for personal use on iOS devices and is not guaranteed to block every unwanted call.
-- You are responsible for how you use the blocked numbers and any local personal entries you add.
-- SpamSniper does not collect or transmit your personal blocklist entries to external servers.
-- The project owner may update these terms at any time by modifying this document.
+## Use of the App
+
+SpamSniper is provided for personal use on supported iOS devices. The app is intended to help reduce unwanted calls by loading selected blocklists into Apple's Call Directory system.
+
+SpamSniper is not guaranteed to block every spam call, prevent caller ID spoofing, or avoid every false positive.
+
+## User Responsibility
+
+You are responsible for:
+
+- reviewing which repositories and blocklists you enable
+- checking any personal blocked numbers you add
+- making sure the app is configured correctly on your device
+
+If you block a legitimate number by mistake, that outcome is your responsibility as the device owner and operator.
+
+## Availability and Changes
+
+The app, its repository sources, and these terms may change over time. Features may be added, changed, limited, or removed without notice.
+
+## No Warranty
+
+SpamSniper is provided "as is" and "as available" without warranties of any kind, express or implied.
 
 ## Use of Third-Party Components
 
-SpamSniper depends on third-party libraries for signature verification and system integration. Those components may have their own license terms.
+SpamSniper depends on third-party libraries and Apple system frameworks. Those components remain subject to their own licenses and platform terms.
 
 ## Liability
 
-The author is not liable for damages arising from the use of the app, including missed calls, false positives, or device behavior.
+To the extent allowed by law, the author is not liable for damages arising from use of the app, including missed calls, blocked legitimate calls, data loss, sync failures, or device behavior related to call blocking.
 
 ## Dispute Resolution
 
