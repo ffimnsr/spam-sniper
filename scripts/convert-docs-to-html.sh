@@ -8,7 +8,7 @@ Usage: $(basename "$0") [output_dir] [template_file]
 Convert docs/*.md into HTML files.
 
 Arguments:
-  output_dir    Optional output directory (default: docs/html)
+  output_dir    Optional output directory (default: docs)
   template_file Optional HTML template containing {{content}}.
                 Defaults to docs/template.html.
 
@@ -19,8 +19,8 @@ EOF
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${SCRIPT_DIR}/.."
-SRC_DIR="${REPO_ROOT}/docs"
-OUT_DIR="${1:-${SRC_DIR}/html}"
+SRC_DIR="${REPO_ROOT}/docs/source"
+OUT_DIR="${1:-${REPO_ROOT}/docs}"
 TEMPLATE_FILE="${2:-${SRC_DIR}/template.html}"
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
