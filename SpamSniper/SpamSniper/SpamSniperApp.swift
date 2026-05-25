@@ -2,7 +2,7 @@
 //  SpamSniperApp.swift
 //  SpamSniper
 //
-//  Created by pastel on 3/19/26.
+//  Created by ffimnsr on 3/19/26.
 //
 
 import Foundation

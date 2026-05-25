@@ -35,7 +35,7 @@ SpamSniper is an iPhone call-blocking app that syncs curated spam blocklists, st
 
 ### Open in Xcode
 
-1. Open [SpamSniper.xcodeproj](/Users/pastel/Projects/spam-sniper/SpamSniper/SpamSniper.xcodeproj) in Xcode.
+1. Open [SpamSniper.xcodeproj](SpamSniper/SpamSniper.xcodeproj) in Xcode.
 2. Select the `SpamSniper` scheme.
 3. Build and run the app.
 
@@ -71,7 +71,7 @@ xcodebuild -project SpamSniper/SpamSniper.xcodeproj \
 
 ## License
 
-SpamSniper is licensed under the MIT License. See [LICENSE](/Users/pastel/Projects/spam-sniper/LICENSE).
+SpamSniper is licensed under the MIT License. See [LICENSE](LICENSE).
 
 ## Third-Party License Notice
 

@@ -69,5 +69,5 @@ If SpamSniper’s privacy practices ever change, this Privacy Policy will be upd
 
 For privacy-related questions or concerns, please open an issue on the GitHub repository:
 
-- https://github.com/pastel/spam-sniper/issues
+- https://github.com/ffimnsr/spam-sniper/issues
 
