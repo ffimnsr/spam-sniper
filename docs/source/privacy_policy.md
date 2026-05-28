@@ -1,4 +1,4 @@
-# Privacy Policy for SpamSniper
+# Privacy Policy
 
 **Effective date:** May 25, 2026
 

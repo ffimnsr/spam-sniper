@@ -89,10 +89,19 @@ for src in "$SRC_DIR"/*.md; do
     python3 - <<PY
 import pathlib
 import markdown
+import re
 import sys
+from html import unescape
 
 src = pathlib.Path(r"$src")
 body = markdown.markdown(src.read_text(encoding='utf-8'))
+
+def normalize_heading(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", unescape(value).lower()).strip()
+
+heading_match = re.match(r"^\s*<h1>(.*?)</h1>\s*", body, flags=re.IGNORECASE | re.DOTALL)
+if heading_match and normalize_heading(heading_match.group(1)) == normalize_heading(r"$page_title"):
+    body = body[heading_match.end():].lstrip()
 
 template = pathlib.Path(r"$TEMPLATE_FILE").read_text(encoding='utf-8')
 if "{{content}}" not in template:
@@ -132,10 +141,6 @@ if "{{content}}" not in template:
     raise SystemExit("Template file must contain {{content}} placeholder.")
 
 index_body = """
-<div class="index-intro">
-  <strong>Essential project pages</strong>
-  <p>These pages cover the parts people usually need before installing, using, or reviewing SpamSniper: privacy expectations, support channels, and the basic terms of use.</p>
-</div>
 <div class="index-grid">
   $index_entries
 </div>
@@ -145,7 +150,7 @@ output = template.replace("{{content}}", index_body)
 output = output.replace("{{title}}", "Documentation")
 output = output.replace("{{filename}}", "index")
 output = output.replace("{{eyebrow}}", "Docs")
-output = output.replace("{{lede}}", "The policy, support, and usage pages for SpamSniper in one place.")
+output = output.replace("{{lede}}", "Privacy, support, and terms pages for SpamSniper, collected in one place.")
 pathlib.Path(r"$OUT_DIR/index.html").write_text(output, encoding='utf-8')
 PY
 

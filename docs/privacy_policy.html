@@ -357,32 +357,6 @@
       margin: 2rem 0;
     }
 
-    .index-intro {
-      margin-bottom: 1.5rem;
-      padding: 1.35rem 1.4rem;
-      border: 1px solid rgba(255, 255, 255, 0.5);
-      border-radius: var(--radius-lg);
-      background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.62) 0%, rgba(246, 250, 255, 0.5) 100%);
-      backdrop-filter: blur(18px) saturate(150%);
-      -webkit-backdrop-filter: blur(18px) saturate(150%);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
-    }
-
-    .index-intro p {
-      margin: 0;
-      color: var(--text-muted);
-    }
-
-    .index-intro strong {
-      display: block;
-      margin-bottom: 0.4rem;
-      color: var(--text-main);
-      font-family: var(--font-ui);
-      font-size: 1rem;
-      letter-spacing: -0.02em;
-    }
-
     .index-grid,
     .doc-list {
       display: grid;
@@ -447,11 +421,78 @@
     }
 
     .footer {
-      padding: 20px 6px 0;
-      color: var(--text-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 18px;
+      margin-top: 20px;
+      padding: 18px 20px;
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.66) 0%, rgba(240, 247, 255, 0.46) 100%);
+      backdrop-filter: blur(22px) saturate(145%);
+      -webkit-backdrop-filter: blur(22px) saturate(145%);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.84),
+        0 16px 34px rgba(57, 90, 132, 0.08);
+    }
+
+    .footer__brand,
+    .footer__links {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .footer__brand {
+      color: var(--text-main);
       font-family: var(--font-ui);
-      font-size: 0.88rem;
-      text-align: center;
+      font-size: 0.92rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .footer__brand::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: linear-gradient(180deg, #79bcff 0%, #2d89ff 100%);
+      box-shadow: 0 0 16px rgba(45, 137, 255, 0.32);
+    }
+
+    .footer__note {
+      color: var(--text-subtle);
+      font-size: 0.84rem;
+      font-weight: 500;
+    }
+
+    .footer__links {
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .footer__links a {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.5rem 0.8rem;
+      border: 1px solid rgba(255, 255, 255, 0.46);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.36);
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    }
+
+    .footer__links a:hover {
+      color: var(--link-hover);
+      border-color: rgba(255, 255, 255, 0.74);
     }
 
     @keyframes fade-up {
@@ -494,6 +535,20 @@
       .content {
         padding-bottom: 32px;
       }
+
+      .footer {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .footer__brand,
+      .footer__links {
+        width: 100%;
+      }
+
+      .footer__links {
+        justify-content: flex-start;
+      }
     }
   </style>
 </head>
@@ -513,8 +568,7 @@
 
       <section class="content">
         <article class="article">
-          <h1>Privacy Policy for SpamSniper</h1>
-<p><strong>Effective date:</strong> May 25, 2026</p>
+          <p><strong>Effective date:</strong> May 25, 2026</p>
 <h2>Summary</h2>
 <p>SpamSniper is designed to block unwanted calls without building a user profile.</p>
 <p>The app does not run analytics, advertising SDKs, or background tracking. It does not upload your personal blocklist entries, your contacts, or your call history to a SpamSniper-operated server.</p>
@@ -561,7 +615,17 @@
       </section>
     </main>
 
-    <footer class="footer">SpamSniper documentation</footer>
+    <footer class="footer">
+      <div class="footer__brand">
+        <span>SpamSniper</span>
+        <span class="footer__note">Crowdsource call blocker.</span>
+      </div>
+      <nav class="footer__links" aria-label="Documentation links">
+        <a href="privacy_policy.html">Privacy</a>
+        <a href="support.html">Support</a>
+        <a href="terms.html">Terms</a>
+      </nav>
+    </footer>
   </div>
 </body>
 </html>
