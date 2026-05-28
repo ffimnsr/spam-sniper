@@ -7,7 +7,7 @@ struct BlocklistSearchView: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
-
+    
     @State private var isAddEntryPresented = false
     @State private var editingEntry: PersonalBlocklistEntry?
     @State private var deletingEntry: PersonalBlocklistEntry?
@@ -19,22 +19,22 @@ struct BlocklistSearchView: View {
     @State private var isExportingPersonalList = false
     @State private var exportDocument: PersonalBlocklistExportDocument?
     @State private var exportErrorMessage: String?
-
+    
     private var palette: AppPalette { AppPalette(colorScheme: colorScheme) }
     private var trimmedQuery: String { model.numberSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines) }
-
+    
     var body: some View {
         GeometryReader { proxy in
             ZStack {
                 LinearGradient(colors: palette.pageBackground, startPoint: .topLeading, endPoint: .bottomTrailing)
                     .ignoresSafeArea()
-
+                
                 decorativeBackground
-
+                
                 ScrollView {
                     VStack(spacing: 16) {
                         searchPanel
-
+                        
                         if showsCenteredResultsPanel {
                             Spacer(minLength: 0)
                             resultsPanel
@@ -64,7 +64,7 @@ struct BlocklistSearchView: View {
                         } label: {
                             Label("Import Personal List", systemImage: "square.and.arrow.down")
                         }
-
+                        
                         Button {
                             isExportConfirmationPresented = true
                         } label: {
@@ -84,7 +84,7 @@ struct BlocklistSearchView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Import or export personal list")
-
+                    
                     Button {
                         isAddEntryPresented = true
                     } label: {
@@ -237,7 +237,7 @@ struct BlocklistSearchView: View {
             Text(exportErrorMessage ?? "The personal list could not be exported.")
         }
     }
-
+    
     private var decorativeBackground: some View {
         GeometryReader { proxy in
             ZStack {
@@ -246,7 +246,7 @@ struct BlocklistSearchView: View {
                     .frame(width: min(proxy.size.width * 0.78, 420), height: min(proxy.size.width * 0.78, 420))
                     .blur(radius: 70)
                     .offset(x: -proxy.size.width * 0.34, y: -120)
-
+                
                 Circle()
                     .fill(palette.ambientGlow[1])
                     .frame(width: min(proxy.size.width * 0.60, 320), height: min(proxy.size.width * 0.60, 320))
@@ -257,7 +257,7 @@ struct BlocklistSearchView: View {
             .allowsHitTesting(false)
         }
     }
-
+    
     private var searchPanel: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 12) {
@@ -270,11 +270,11 @@ struct BlocklistSearchView: View {
                 }
                 .frame(width: 40, height: 40)
                 .shadow(color: palette.tint.opacity(0.18), radius: 10, x: 0, y: 6)
-
+                
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Search blocklists")
                         .font(.headline.weight(.bold))
-
+                    
                     if showsSearchSubtitle {
                         Text("Check the final blocking feed built from synced repositories and your personal list.")
                             .font(.footnote)
@@ -283,10 +283,10 @@ struct BlocklistSearchView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-
+                
                 Spacer(minLength: 0)
             }
-
+            
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) {
                     searchField
@@ -299,7 +299,7 @@ struct BlocklistSearchView: View {
                         }
                     }
                 }
-
+                
                 VStack(spacing: 12) {
                     searchField
                     HStack(spacing: 12) {
@@ -310,7 +310,7 @@ struct BlocklistSearchView: View {
                     }
                 }
             }
-
+            
             if shouldShowStatusBanner {
                 statusBanner
             }
@@ -323,13 +323,13 @@ struct BlocklistSearchView: View {
         }
         .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.22 : 0.08), radius: 22, x: 0, y: 12)
     }
-
+    
     private var searchField: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
                 .font(.headline.weight(.semibold))
                 .foregroundStyle(isSearchFieldFocused ? palette.tint : palette.secondaryText)
-
+            
             TextField("Enter phone number", text: $model.numberSearchQuery)
                 .font(.body.weight(.medium))
                 .textInputAutocapitalization(.never)
@@ -338,7 +338,7 @@ struct BlocklistSearchView: View {
                 .submitLabel(.search)
                 .focused($isSearchFieldFocused)
                 .onSubmit(performSearch)
-
+            
             if !model.numberSearchQuery.isEmpty {
                 Button {
                     resetSearch()
@@ -359,7 +359,7 @@ struct BlocklistSearchView: View {
                 .strokeBorder(isSearchFieldFocused ? palette.tint.opacity(0.70) : .white.opacity(colorScheme == .dark ? 0.12 : 0.34), lineWidth: isSearchFieldFocused ? 1.5 : 1)
         }
     }
-
+    
     private var searchButton: some View {
         Button(action: performSearch) {
             HStack(spacing: 8) {
@@ -385,7 +385,7 @@ struct BlocklistSearchView: View {
         .disabled(model.isSearchingNumbers || trimmedQuery.isEmpty)
         .opacity(model.isSearchingNumbers || !trimmedQuery.isEmpty ? 1 : 0.45)
     }
-
+    
     private var resetButton: some View {
         Button(action: resetSearch) {
             Label("Reset", systemImage: "arrow.counterclockwise")
@@ -402,19 +402,19 @@ struct BlocklistSearchView: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Reset search")
     }
-
+    
     private var statusBanner: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: model.isSearchingNumbers ? "clock.arrow.circlepath" : "checkmark.shield.fill")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(palette.tint)
                 .padding(.top, 1)
-
+            
             Text(model.numberSearchMessage ?? SpamBlockerModel.defaultNumberSearchMessage)
                 .font(.footnote)
                 .foregroundStyle(palette.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
-
+            
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
@@ -422,7 +422,7 @@ struct BlocklistSearchView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(palette.tintSoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
-
+    
     @ViewBuilder
     private var resultsPanel: some View {
         if model.isSearchingNumbers && model.numberSearchResults.isEmpty {
@@ -447,11 +447,11 @@ struct BlocklistSearchView: View {
             sectionedResultsList
         }
     }
-
+    
     private var sectionedResultsList: some View {
         let personal = model.numberSearchResults.filter { $0.source == .personal || $0.source == .combined }
         let repo = model.numberSearchResults.filter { $0.source == .repo }
-
+        
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -461,9 +461,9 @@ struct BlocklistSearchView: View {
                         .font(.footnote)
                         .foregroundStyle(palette.secondaryText)
                 }
-
+                
                 Spacer()
-
+                
                 Text("\(model.numberSearchResults.count)")
                     .font(.headline.weight(.bold))
                     .foregroundStyle(palette.tint)
@@ -471,7 +471,7 @@ struct BlocklistSearchView: View {
                     .padding(.vertical, 8)
                     .background(palette.tintSoft, in: Capsule())
             }
-
+            
             if !personal.isEmpty {
                 resultsSection(
                     title: "My Personal List",
@@ -481,7 +481,7 @@ struct BlocklistSearchView: View {
                     allowsEditing: true
                 )
             }
-
+            
             if !repo.isEmpty {
                 resultsSection(
                     title: "Synced Blocklist",
@@ -493,7 +493,7 @@ struct BlocklistSearchView: View {
             }
         }
     }
-
+    
     private func resultsSection(
         title: String,
         symbol: String,
@@ -516,7 +516,7 @@ struct BlocklistSearchView: View {
                     .background(tint.opacity(0.14), in: Capsule())
             }
             .foregroundStyle(tint)
-
+            
             VStack(spacing: 10) {
                 ForEach(results) { result in
                     if allowsEditing {
@@ -540,49 +540,49 @@ struct BlocklistSearchView: View {
             }
         }
     }
-
+    
     private var resultsMinHeight: CGFloat {
         if verticalSizeClass == .compact { return 220 }
         if dynamicTypeSize.isAccessibilitySize { return 360 }
         return 420
     }
-
+    
     private var emptyResultsDescription: String {
         if trimmedQuery.isEmpty {
             return "Enter digits or paste a formatted number to search the final blocking feed, including synced blocklists and personal entries."
         }
         return model.numberSearchMessage ?? "Try a different number or refresh your blocklists first."
     }
-
+    
     private var contentTopPadding: CGFloat {
         verticalSizeClass == .compact ? 12 : 18
     }
-
+    
     private var showsCenteredResultsPanel: Bool {
         model.numberSearchResults.isEmpty
     }
-
+    
     private func performSearch() {
         guard !model.isSearchingNumbers, !trimmedQuery.isEmpty else { return }
         isSearchFieldFocused = false
         Task { await model.searchNumbers() }
     }
-
+    
     private func resetSearch() {
         isSearchFieldFocused = false
         model.resetNumberSearch()
     }
-
+    
     private func deleteSelectedPersonalEntry() {
         guard let entry = deletingEntry else { return }
         deletingEntry = nil
-
+        
         Task { @MainActor in
             model.personalBlocklistStore.delete(ids: [entry.id])
             await model.processPersonalBlocklistChange()
         }
     }
-
+    
     private func handleImportSelection(_ result: Result<URL, Error>) {
         do {
             let url = try result.get()
@@ -592,24 +592,24 @@ struct BlocklistSearchView: View {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
-
+            
             let data = try Data(contentsOf: url)
             importPreview = try model.personalBlocklistStore.previewImport(from: data)
         } catch {
             importErrorMessage = error.localizedDescription
         }
     }
-
+    
     private func mergeImportedEntries() {
         guard let importPreview else { return }
         self.importPreview = nil
-
+        
         Task { @MainActor in
             importResult = model.personalBlocklistStore.mergeImportedEntries(using: importPreview)
             _ = await model.processPersonalBlocklistChange()
         }
     }
-
+    
     private func beginExport() {
         do {
             exportDocument = try PersonalBlocklistExportDocument(data: model.personalBlocklistStore.exportJSONLines())
@@ -618,59 +618,59 @@ struct BlocklistSearchView: View {
             exportErrorMessage = error.localizedDescription
         }
     }
-
+    
     private var showsResetAction: Bool {
         !model.numberSearchQuery.isEmpty ||
         !model.numberSearchResults.isEmpty ||
         (model.numberSearchMessage != nil && model.numberSearchMessage != SpamBlockerModel.defaultNumberSearchMessage)
     }
-
+    
     private var shouldShowStatusBanner: Bool {
         model.isSearchingNumbers
     }
-
+    
     private var showsSearchSubtitle: Bool {
         verticalSizeClass != .compact || dynamicTypeSize.isAccessibilitySize
     }
-
+    
     private var importPreviewTitle: String {
         guard let importPreview else {
             return "Merge Imported Entries?"
         }
         return "Merge \(importPreview.importedCount) Imported Entries?"
     }
-
+    
     private var importPreviewMessage: String {
         guard let importPreview else {
             return ""
         }
-
+        
         var parts = [
             "Current total: \(importPreview.currentCount).",
             "\(importPreview.updatesCount) existing numbers will be updated.",
             "\(importPreview.additionsCount) new numbers will be added.",
             "Final total after merge: \(importPreview.mergedTotalCount)."
         ]
-
+        
         if importPreview.duplicateCountInImport > 0 {
             parts.append("\(importPreview.duplicateCountInImport) duplicate lines in the import file were collapsed to the last value for each number.")
         }
-
+        
         return parts.joined(separator: " ")
     }
-
+    
     private var importResultMessage: String {
         guard let importResult else {
             return ""
         }
-
+        
         return "\(importResult.importedCount) numbers were imported. \(importResult.updatesCount) existing numbers were updated, \(importResult.additionsCount) new numbers were added, and your personal list now contains \(importResult.finalTotalCount) entries."
     }
-
+    
     private var exportConfirmationTitle: String {
         "Export \(model.personalEntries.count) Personal Entries?"
     }
-
+    
     private var exportConfirmationMessage: String {
         "SpamSniper will export your personal blocklist as JSON Lines (.jsonl)."
     }
@@ -680,24 +680,24 @@ private struct PersonalBlocklistExportDocument: FileDocument {
     static var readableContentTypes: [UTType] {
         [.personalBlocklistJSONLines]
     }
-
+    
     let data: Data
-
+    
     init(data: Data) {
         self.data = data
     }
-
+    
     init(configuration: ReadConfiguration) throws {
         data = configuration.file.regularFileContents ?? Data()
     }
-
+    
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         FileWrapper(regularFileWithContents: data)
     }
 }
 
 private extension UTType {
-    static var personalBlocklistJSONLines: UTType {
+    nonisolated static var personalBlocklistJSONLines: UTType {
         UTType(exportedAs: "com.pastel.spamsniper.personal-blocklist-jsonl", conformingTo: .plainText)
     }
 }
@@ -710,18 +710,18 @@ private struct SearchStateCard: View {
     let systemImage: String
     let tint: Color
     let showsProgress: Bool
-
+    
     @Environment(\.colorScheme) private var colorScheme
-
+    
     private var palette: AppPalette { AppPalette(colorScheme: colorScheme) }
-
+    
     var body: some View {
         VStack(spacing: 16) {
             ZStack {
                 Circle()
                     .fill(tint.opacity(colorScheme == .dark ? 0.18 : 0.12))
                     .frame(width: 92, height: 92)
-
+                
                 Image(systemName: systemImage)
                     .font(.system(size: 48, weight: .semibold))
                     .foregroundStyle(tint)
@@ -735,7 +735,7 @@ private struct SearchStateCard: View {
                         .offset(x: 4, y: 4)
                 }
             }
-
+            
             VStack(spacing: 8) {
                 Text(title)
                     .font(.title2.weight(.bold))
@@ -765,24 +765,24 @@ private struct NumberSearchResultRow: View {
     let result: BlockedNumberSearchResult
     var onEditPersonal: (() -> Void)?
     var onDeletePersonal: (() -> Void)?
-
+    
     @Environment(\.colorScheme) private var colorScheme
-
+    
     private var palette: AppPalette { AppPalette(colorScheme: colorScheme) }
-
+    
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if showsSourceIcon {
                 sourceIcon
             }
-
+            
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(result.record.phoneNumberE164)
                             .font(.headline.weight(.bold))
                             .textSelection(.enabled)
-
+                        
                         if !trimmedDisplayName.isEmpty {
                             Text(trimmedDisplayName)
                                 .font(.subheadline)
@@ -791,14 +791,14 @@ private struct NumberSearchResultRow: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-
+                    
                     Spacer(minLength: 8)
                     MatchChip(label: result.matchKind.rawValue.capitalized, tint: matchColor)
                     if showsPersonalActions {
                         personalActionsMenu
                     }
                 }
-
+                
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
                         InfoChip(label: result.record.category, tint: sourceColor)
@@ -808,7 +808,7 @@ private struct NumberSearchResultRow: View {
                         }
                         Spacer(minLength: 0)
                     }
-
+                    
                     VStack(alignment: .leading, spacing: 8) {
                         InfoChip(label: result.record.category, tint: sourceColor)
                         NeutralInfoChip(label: result.record.confidence.capitalized)
@@ -817,7 +817,7 @@ private struct NumberSearchResultRow: View {
                         }
                     }
                 }
-
+                
                 if let detailSummary {
                     Text(detailSummary)
                         .font(.subheadline)
@@ -825,7 +825,7 @@ private struct NumberSearchResultRow: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
+                
             }
         }
         .padding(14)
@@ -838,7 +838,7 @@ private struct NumberSearchResultRow: View {
         .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.16 : 0.05), radius: 14, x: 0, y: 8)
         .accessibilityElement(children: showsPersonalActions ? .contain : .combine)
     }
-
+    
     private var sourceIcon: some View {
         ZStack {
             Circle()
@@ -849,7 +849,7 @@ private struct NumberSearchResultRow: View {
         }
         .frame(width: 38, height: 38)
     }
-
+    
     private var personalActionsMenu: some View {
         Menu {
             if let onEditPersonal {
@@ -870,23 +870,23 @@ private struct NumberSearchResultRow: View {
         .accessibilityLabel("Personal entry actions")
         .fixedSize()
     }
-
+    
     private var trimmedDisplayName: String {
         result.record.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-
+    
     private var detailSummary: String? {
         var details: [String] = []
         var seen = Set<String>()
         let excluded = Set([trimmedDisplayName.lowercased(), result.record.phoneNumberE164.lowercased()])
-
+        
         func appendUnique(_ value: String) {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             let normalized = trimmed.lowercased()
             guard !trimmed.isEmpty, !excluded.contains(normalized), seen.insert(normalized).inserted else { return }
             details.append(trimmed)
         }
-
+        
         if !result.record.aliases.isEmpty {
             appendUnique("Aliases: \(result.record.aliases.joined(separator: ", "))")
         }
@@ -900,10 +900,10 @@ private struct NumberSearchResultRow: View {
             return result.record.notes
         }()
         appendUnique(personalNotes)
-
+        
         return details.isEmpty ? nil : details.joined(separator: " • ")
     }
-
+    
     private var sourceSymbol: String {
         switch result.source {
         case .personal: return "person.fill"
@@ -911,14 +911,14 @@ private struct NumberSearchResultRow: View {
         case .repo: return "shield.lefthalf.filled"
         }
     }
-
+    
     private var sourceColor: Color {
         switch result.source {
         case .personal, .combined: return palette.tint
         case .repo: return palette.warning
         }
     }
-
+    
     private var matchColor: Color {
         switch result.matchKind {
         case .exact: return palette.success
@@ -926,11 +926,11 @@ private struct NumberSearchResultRow: View {
         case .contains: return palette.warning
         }
     }
-
+    
     private var showsSourceIcon: Bool {
         !showsPersonalActions
     }
-
+    
     private var showsPersonalActions: Bool {
         onEditPersonal != nil || onDeletePersonal != nil
     }
@@ -941,7 +941,7 @@ private struct NumberSearchResultRow: View {
 private struct MatchChip: View {
     let label: String
     let tint: Color
-
+    
     var body: some View {
         Text(label)
             .font(.caption.weight(.bold))
@@ -956,7 +956,7 @@ private struct MatchChip: View {
 private struct InfoChip: View {
     let label: String
     let tint: Color
-
+    
     var body: some View {
         Text(label)
             .font(.caption.weight(.semibold))
@@ -970,7 +970,7 @@ private struct InfoChip: View {
 
 private struct NeutralInfoChip: View {
     let label: String
-
+    
     var body: some View {
         Text(label)
             .font(.caption.weight(.semibold))
@@ -986,7 +986,7 @@ private struct NeutralInfoChip: View {
 
 private struct BlocklistSearchPreviewHost: View {
     @State private var model = SpamBlockerModel()
-
+    
     var body: some View {
         NavigationStack {
             BlocklistSearchView(model: model)

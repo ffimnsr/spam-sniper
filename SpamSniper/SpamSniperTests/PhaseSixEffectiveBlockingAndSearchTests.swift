@@ -1,6 +1,7 @@
 import XCTest
 @testable import SpamSniper
 
+@MainActor
 final class PhaseSixEffectiveBlockingAndSearchTests: XCTestCase {
     func testComposeIncludesRepositoryOnlyNumberInEffectiveSnapshot() throws {
         let snapshot = try composeSnapshot(

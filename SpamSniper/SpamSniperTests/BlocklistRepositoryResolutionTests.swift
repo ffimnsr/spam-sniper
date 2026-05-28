@@ -1,23 +1,24 @@
 import XCTest
 @testable import SpamSniper
 
+@MainActor
 final class BlocklistRepositoryResolutionTests: XCTestCase {
     func testNormalizedRepositoryURLReturnsDirectRepoJSONURLUnchanged() throws {
         let directURL = "https://example.com/catalog/repo.json"
-
+        
         XCTAssertEqual(
             try BlocklistSyncService.normalizedRepositoryURL(from: directURL),
             URL(string: directURL)
         )
     }
-
+    
     func testNormalizedRepositoryURLConvertsGitHubRepositoryURLToRawRepoJSON() throws {
         XCTAssertEqual(
             try BlocklistSyncService.normalizedRepositoryURL(from: "https://github.com/example/spam-sniper"),
             URL(string: "https://raw.githubusercontent.com/example/spam-sniper/main/blocklist/repo.json")
         )
     }
-
+    
     func testResolvedCountriesUseRepositoryRelativeURLs() {
         let repository = makeRepository(
             gpgKeyURL: "keys/community.asc",
@@ -39,9 +40,9 @@ final class BlocklistRepositoryResolutionTests: XCTestCase {
                 )
             ]
         )
-
+        
         let sections = repository.resolvedCountries(relativeTo: repositoryURL)
-
+        
         XCTAssertEqual(sections.count, 1)
         XCTAssertEqual(sections[0].code, "PH")
         XCTAssertEqual(sections[0].name, "Philippines")
@@ -49,7 +50,7 @@ final class BlocklistRepositoryResolutionTests: XCTestCase {
         XCTAssertEqual(sections[0].blocklists[0].documentURL, URL(string: "https://example.com/catalog/PH/core.json"))
         XCTAssertEqual(sections[0].blocklists[0].signatureURL, URL(string: "https://example.com/catalog/signatures/ph.asc"))
     }
-
+    
     func testCatalogEntriesPreserveAbsoluteDocumentAndSignatureURLs() throws {
         let repository = makeRepository(
             gpgKeyURL: "keys/community.asc",
@@ -71,13 +72,13 @@ final class BlocklistRepositoryResolutionTests: XCTestCase {
                 )
             ]
         )
-
+        
         let entry = try XCTUnwrap(repository.catalogEntries(relativeTo: repositoryURL).first)
-
+        
         XCTAssertEqual(entry.documentURL, URL(string: "https://cdn.example.com/blocklists/us-core.json"))
         XCTAssertEqual(entry.signatureURL, URL(string: "https://cdn.example.com/signatures/us-core.json.asc"))
     }
-
+    
     func testBlocklistSignatureResolutionNeverFallsBackToRepositoryKeyURL() throws {
         let repository = makeRepository(
             gpgKeyURL: "keys/community.asc",
@@ -99,27 +100,27 @@ final class BlocklistRepositoryResolutionTests: XCTestCase {
                 )
             ]
         )
-
+        
         let entry = try XCTUnwrap(repository.catalogEntries(relativeTo: repositoryURL).first)
-
+        
         XCTAssertEqual(entry.documentURL, URL(string: "https://example.com/catalog/UK/core.json"))
         XCTAssertNil(entry.signatureURL)
     }
-
+    
     func testResolvedRepositoryPublicKeyURLSupportsRelativeAndAbsoluteValues() {
         let relativeRepository = makeRepository(gpgKeyURL: "keys/community.asc")
         XCTAssertEqual(
             relativeRepository.resolvedRepositoryPublicKeyURL(relativeTo: repositoryURL),
             URL(string: "https://example.com/catalog/keys/community.asc")
         )
-
+        
         let absoluteRepository = makeRepository(gpgKeyURL: "https://keys.example.com/community.asc")
         XCTAssertEqual(
             absoluteRepository.resolvedRepositoryPublicKeyURL(relativeTo: repositoryURL),
             URL(string: "https://keys.example.com/community.asc")
         )
     }
-
+    
     func testFlattenedCatalogMatchesResolvedSections() {
         let repository = makeRepository(
             gpgKeyURL: "keys/community.asc",
@@ -156,10 +157,10 @@ final class BlocklistRepositoryResolutionTests: XCTestCase {
                 )
             ]
         )
-
+        
         let flattenedFromSections = repository.resolvedCountries(relativeTo: repositoryURL).flatMap(\.blocklists)
         let flattenedCatalog = repository.catalogEntries(relativeTo: repositoryURL)
-
+        
         XCTAssertEqual(flattenedCatalog, flattenedFromSections)
     }
 }
@@ -168,7 +169,7 @@ private extension BlocklistRepositoryResolutionTests {
     var repositoryURL: URL {
         URL(string: "https://example.com/catalog/repo.json")!
     }
-
+    
     func makeRepository(
         gpgKeyURL: String?,
         countries: [BlocklistRepositoryCountry] = []

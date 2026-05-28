@@ -14,7 +14,7 @@ struct ContactFilterSnapshot {
         case denied
         case restricted
         case notDetermined
-
+        
         var description: String {
             switch self {
             case .authorized:
@@ -30,7 +30,7 @@ struct ContactFilterSnapshot {
             }
         }
     }
-
+    
     let state: PermissionState
     let phoneNumbers: Set<Int64>
 }
@@ -39,48 +39,29 @@ enum ContactFilteringService {
     static func currentPermissionState() -> ContactFilterSnapshot.PermissionState {
         permissionState(for: CNContactStore.authorizationStatus(for: .contacts))
     }
-
+    
     static func requestAccessIfNeeded() async -> ContactFilterSnapshot.PermissionState {
         let store = CNContactStore()
         let state = currentPermissionState()
         guard state == .notDetermined else {
             return state
         }
-
+        
         _ = await requestContactsAccess(store: store)
         return currentPermissionState()
     }
-
+    
     static func loadSnapshot() async -> ContactFilterSnapshot {
         let state = currentPermissionState()
-        let store = CNContactStore()
-
+        
         guard state == .authorized || state == .limited else {
             return ContactFilterSnapshot(state: state, phoneNumbers: [])
         }
-
-        let keys: [CNKeyDescriptor] = [CNContactPhoneNumbersKey as CNKeyDescriptor]
-        let request = CNContactFetchRequest(keysToFetch: keys)
-
-        let phoneNumbersResult: Result<Set<Int64>, Error> = await withCheckedContinuation { continuation in
-            Task.detached {
-                var collected = Set<Int64>()
-                do {
-                    try store.enumerateContacts(with: request) { contact, _ in
-                        for phone in contact.phoneNumbers {
-                            let digits = phone.value.stringValue.filter(\.isNumber)
-                            if let value = Int64(digits), value > 0 {
-                                collected.insert(value)
-                            }
-                        }
-                    }
-                    continuation.resume(returning: .success(collected))
-                } catch {
-                    continuation.resume(returning: .failure(error))
-                }
-            }
-        }
-
+        
+        let phoneNumbersResult: Result<Set<Int64>, Error> = await Task.detached(priority: .userInitiated) {
+            fetchPhoneNumbers()
+        }.value
+        
         switch phoneNumbersResult {
         case .success(let numbers):
             return ContactFilterSnapshot(state: state, phoneNumbers: numbers)
@@ -88,7 +69,7 @@ enum ContactFilteringService {
             return ContactFilterSnapshot(state: state, phoneNumbers: [])
         }
     }
-
+    
     private static func requestContactsAccess(store: CNContactStore) async -> Bool {
         await withCheckedContinuation { continuation in
             store.requestAccess(for: .contacts) { granted, _ in
@@ -96,7 +77,29 @@ enum ContactFilteringService {
             }
         }
     }
-
+    
+    private nonisolated static func fetchPhoneNumbers() -> Result<Set<Int64>, Error> {
+        let store = CNContactStore()
+        let keys: [CNKeyDescriptor] = [CNContactPhoneNumbersKey as CNKeyDescriptor]
+        let request = CNContactFetchRequest(keysToFetch: keys)
+        var collected = Set<Int64>()
+        
+        do {
+            try store.enumerateContacts(with: request) { contact, _ in
+                for phone in contact.phoneNumbers {
+                    let digits = phone.value.stringValue.filter(\.isNumber)
+                    if let value = Int64(digits), value > 0 {
+                        collected.insert(value)
+                    }
+                }
+            }
+            
+            return .success(collected)
+        } catch {
+            return .failure(error)
+        }
+    }
+    
     private static func permissionState(for status: CNAuthorizationStatus) -> ContactFilterSnapshot.PermissionState {
         switch status {
         case .authorized:

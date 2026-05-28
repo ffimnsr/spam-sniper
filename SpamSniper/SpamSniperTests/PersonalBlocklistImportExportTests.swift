@@ -1,43 +1,44 @@
 import XCTest
 @testable import SpamSniper
 
+@MainActor
 final class PersonalBlocklistImportExportTests: XCTestCase {
     func testExportJSONLinesIncludesOneJSONObjectPerEntry() throws {
         let store = PersonalBlocklistStore.shared
         let originalEntries = store.entries
         defer { store.entries = originalEntries }
-
+        
         store.entries = [
             makeEntry(phoneNumber: 1_555_000_1111, displayName: "Alpha"),
             makeEntry(phoneNumber: 1_555_000_2222, displayName: "Beta")
         ]
-
+        
         let data = try store.exportJSONLines()
         let lines = try XCTUnwrap(String(data: data, encoding: .utf8))
             .split(separator: "\n")
-
+        
         XCTAssertEqual(lines.count, 2)
         XCTAssertTrue(lines[0].contains("\"phoneNumber\":\"+15550001111\""))
         XCTAssertTrue(lines[1].contains("\"phoneNumber\":\"+15550002222\""))
     }
-
+    
     func testPreviewImportReportsAdditionsUpdatesAndCollapsedDuplicates() throws {
         let store = PersonalBlocklistStore.shared
         let originalEntries = store.entries
         defer { store.entries = originalEntries }
-
+        
         store.entries = [
             makeEntry(phoneNumber: 1_555_000_1111, displayName: "Existing")
         ]
-
+        
         let payload = """
         {"phoneNumber":"+15550001111","displayName":"Updated Existing"}
         {"phoneNumber":"+15550002222","displayName":"First New"}
         {"phoneNumber":"+15550002222","displayName":"Last New"}
         """
-
+        
         let preview = try store.previewImport(from: Data(payload.utf8))
-
+        
         XCTAssertEqual(preview.importedCount, 2)
         XCTAssertEqual(preview.updatesCount, 1)
         XCTAssertEqual(preview.additionsCount, 1)
@@ -46,24 +47,24 @@ final class PersonalBlocklistImportExportTests: XCTestCase {
         XCTAssertEqual(preview.mergedTotalCount, 2)
         XCTAssertEqual(preview.importedEntries.last?.displayName, "Last New")
     }
-
+    
     func testMergeImportedEntriesAppliesPreviewToStoredEntries() throws {
         let store = PersonalBlocklistStore.shared
         let originalEntries = store.entries
         defer { store.entries = originalEntries }
-
+        
         store.entries = [
             makeEntry(phoneNumber: 1_555_000_1111, displayName: "Existing")
         ]
-
+        
         let payload = """
         {"phoneNumber":"+15550001111","displayName":"Updated Existing","notes":"Updated note"}
         {"phoneNumber":"+15550002222","displayName":"New Entry"}
         """
-
+        
         let preview = try store.previewImport(from: Data(payload.utf8))
         let result = store.mergeImportedEntries(using: preview)
-
+        
         XCTAssertEqual(result.importedCount, 2)
         XCTAssertEqual(result.updatesCount, 1)
         XCTAssertEqual(result.additionsCount, 1)
@@ -73,16 +74,16 @@ final class PersonalBlocklistImportExportTests: XCTestCase {
         XCTAssertEqual(store.entry(forDigits: "15550001111")?.notes, "Updated note")
         XCTAssertEqual(store.entry(forDigits: "15550002222")?.displayName, "New Entry")
     }
-
+    
     func testPreviewImportRejectsInvalidPhoneNumbers() throws {
         let store = PersonalBlocklistStore.shared
         let originalEntries = store.entries
         defer { store.entries = originalEntries }
-
+        
         let payload = """
         {"phoneNumber":"not-a-number","displayName":"Broken"}
         """
-
+        
         XCTAssertThrowsError(try store.previewImport(from: Data(payload.utf8))) { error in
             XCTAssertEqual(
                 (error as? PersonalBlocklistTransferError)?.errorDescription,
