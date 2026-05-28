@@ -159,7 +159,7 @@ export default function RemovalDetailPage() {
   };
 
   if (loadingDetail) {
-    return <p className="text-gray-600">Loading...</p>;
+    return <p className="text-slate-600">Loading...</p>;
   }
 
   if (detailError) {
@@ -167,72 +167,88 @@ export default function RemovalDetailPage() {
   }
 
   if (!detail) {
-    return <p className="text-gray-600">No removal request found.</p>;
+    return <p className="text-slate-600">No removal request found.</p>;
   }
 
   return (
-    <div className="max-w-xl">
-      <h2 className="text-xl font-bold text-gray-900 mb-4">Removal Request</h2>
-      <Card className="mb-6">
-        <CardBody>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-lg font-semibold">{detail.maskedNumber}</span>
+    <div className="page-stack">
+      <section className="page-hero">
+        <p className="page-eyebrow">Removal Status</p>
+        <h1 className="page-title">Track contest window.</h1>
+        <p className="page-lede">
+          Follow removal progress, dispute open request, or verify deadline and
+          current count.
+        </p>
+      </section>
+
+      <Card className="max-w-2xl">
+        <CardBody className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-lg font-semibold text-slate-950">
+              {detail.maskedNumber}
+            </span>
             <StatusBadge status={detail.status} />
           </div>
-          <p className="text-sm text-gray-600">Reason: {detail.reason}</p>
-          <p className="text-sm text-gray-600">
-            Contest deadline:{" "}
-            {new Date(detail.contestDeadline).toLocaleDateString()}
+          <p className="text-sm text-slate-600">Reason: {detail.reason}</p>
+          <p className="text-sm text-slate-600">
+            Contest deadline: {new Date(detail.contestDeadline).toLocaleDateString()}
           </p>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-slate-600">
             Contests: {detail.contestCount}
           </p>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-slate-600">
             Window open: {detail.contestWindowOpen ? "Yes" : "No"}
           </p>
         </CardBody>
       </Card>
 
       {detail.status === "open" && detail.contestWindowOpen && (
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            Contest This Removal
-          </h3>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <Select
-              label="Reason"
-              options={contestReasons}
-              {...register("reason")}
-              error={errors.reason?.message}
-            />
-            <div>
-              <TurnstileWidget
-                onVerify={(token) => setValue("turnstileToken", token)}
-                onError={() => setValue("turnstileToken", "")}
-              />
-              {errors.turnstileToken && (
-                <p className="text-sm text-red-600">
-                  {errors.turnstileToken.message}
-                </p>
-              )}
+        <Card className="max-w-2xl">
+          <CardBody className="space-y-4">
+            <div className="space-y-2">
+              <p className="page-eyebrow">Contest</p>
+              <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+                Challenge this removal.
+              </h2>
             </div>
-            <Button type="submit" loading={contestLoading}>
-              Submit Contest
-            </Button>
-          </form>
-          {contestError && <p className="mt-4 text-red-600">{contestError}</p>}
-          {contestResult && (
-            <Card className="mt-4">
-              <CardBody>
-                <p className="font-medium text-gray-900">Contest submitted.</p>
-                <p className="text-sm text-gray-600">
-                  Contests: {contestResult.contestCount} · Status:{" "}
-                  {contestResult.status}
-                </p>
-              </CardBody>
-            </Card>
-          )}
-        </div>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <Select
+                label="Reason"
+                options={contestReasons}
+                {...register("reason")}
+                error={errors.reason?.message}
+              />
+              <div className="space-y-2">
+                <TurnstileWidget
+                  onVerify={(token) => setValue("turnstileToken", token)}
+                  onError={() => setValue("turnstileToken", "")}
+                />
+                {errors.turnstileToken && (
+                  <p className="text-sm text-red-600">
+                    {errors.turnstileToken.message}
+                  </p>
+                )}
+              </div>
+              <Button type="submit" loading={contestLoading}>
+                Submit contest
+              </Button>
+            </form>
+            {contestError && <p className="text-red-600">{contestError}</p>}
+            {contestResult && (
+              <Card>
+                <CardBody className="space-y-1">
+                  <p className="font-semibold text-slate-950">
+                    Contest submitted.
+                  </p>
+                  <p className="text-sm text-slate-600">
+                    Contests: {contestResult.contestCount} · Status:{" "}
+                    {contestResult.status}
+                  </p>
+                </CardBody>
+              </Card>
+            )}
+          </CardBody>
+        </Card>
       )}
     </div>
   );

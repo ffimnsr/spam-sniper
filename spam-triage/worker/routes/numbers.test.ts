@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Env } from "../types.ts";
 import { handleCheckNumber } from "./numbers.ts";
 
 class MockStatement {
@@ -72,6 +71,7 @@ describe("handleCheckNumber", () => {
       HASH_SECRET: "test-secret",
       TURNSTILE_SECRET_KEY: "test-turnstile",
       ADMIN_PASSWORD: "admin",
+      HIDDEN_ADMIN_PATH: "/hidden-review-path",
     };
 
     const request = new Request(
@@ -102,6 +102,7 @@ describe("handleCheckNumber", () => {
       HASH_SECRET: "test-secret",
       TURNSTILE_SECRET_KEY: "test-turnstile",
       ADMIN_PASSWORD: "admin",
+      HIDDEN_ADMIN_PATH: "/hidden-review-path",
     };
 
     const request = new Request(
@@ -122,10 +123,6 @@ describe("handleCheckNumber", () => {
   });
 
   it("includes removal info when number is under review", async () => {
-    const _deadline = new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000,
-    ).toISOString();
-
     const env = {
       DB: new MockDb({
         numberRow: {
@@ -141,6 +138,7 @@ describe("handleCheckNumber", () => {
       HASH_SECRET: "test-secret",
       TURNSTILE_SECRET_KEY: "test-turnstile",
       ADMIN_PASSWORD: "admin",
+      HIDDEN_ADMIN_PATH: "/hidden-review-path",
     };
 
     const request = new Request(
@@ -162,6 +160,7 @@ describe("handleCheckNumber", () => {
       HASH_SECRET: "test-secret",
       TURNSTILE_SECRET_KEY: "test-turnstile",
       ADMIN_PASSWORD: "admin",
+      HIDDEN_ADMIN_PATH: "/hidden-review-path",
     };
 
     const request = new Request("https://example.com/api/numbers/check");
@@ -179,6 +178,7 @@ describe("handleCheckNumber", () => {
       HASH_SECRET: "test-secret",
       TURNSTILE_SECRET_KEY: "test-turnstile",
       ADMIN_PASSWORD: "admin",
+      HIDDEN_ADMIN_PATH: "/hidden-review-path",
     };
 
     const request = new Request(

@@ -2,17 +2,19 @@ import { Link } from "react-router-dom";
 
 export default function NotFoundPage() {
   return (
-    <div className="max-w-xl">
-      <h2 className="text-xl font-bold text-gray-900 mb-2">Page Not Found</h2>
-      <p className="text-gray-600 mb-4">
-        The page you are looking for does not exist.
-      </p>
-      <Link
-        to="/"
-        className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-      >
-        Go Home
-      </Link>
+    <div className="page-stack max-w-2xl">
+      <section className="page-hero">
+        <p className="page-eyebrow">Missing Page</p>
+        <h1 className="page-title">Route not found.</h1>
+        <p className="page-lede">
+          Page does not exist or was moved outside public navigation.
+        </p>
+        <div className="mt-8">
+          <Link to="/" className="app-nav__link !px-5 !py-3">
+            Go home
+          </Link>
+        </div>
+      </section>
     </div>
   );
 }

@@ -75,70 +75,75 @@ export default function RemovePage() {
   };
 
   return (
-    <div className="max-w-xl">
-      <h2 className="text-xl font-bold text-gray-900 mb-4">
-        Request Number Removal
-      </h2>
-      <div className="mb-4 text-sm text-gray-600 space-y-1">
-        <p>Removal is not immediate.</p>
-        <p>The contest period lasts 7 days.</p>
-        <p>If nobody contests, the number will be removed automatically.</p>
-        <p>If contested, the number becomes disputed and requires review.</p>
-      </div>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <Input
-          label="Phone Number"
-          {...register("phoneNumber")}
-          error={errors.phoneNumber?.message}
-          placeholder="+63 917 123 4567"
-        />
-        <Input
-          label="Country Code"
-          {...register("country")}
-          error={errors.country?.message}
-          placeholder="PH"
-        />
-        <Select
-          label="Reason"
-          options={reasons}
-          {...register("reason")}
-          error={errors.reason?.message}
-        />
-        <div>
-          <TurnstileWidget
-            onVerify={(token) => setValue("turnstileToken", token)}
-            onError={() => setValue("turnstileToken", "")}
-          />
-          {errors.turnstileToken && (
-            <p className="text-sm text-red-600">
-              {errors.turnstileToken.message}
-            </p>
-          )}
-        </div>
-        <Button type="submit" loading={loading}>
-          Submit Request
-        </Button>
-      </form>
+    <div className="page-stack">
+      <section className="page-hero">
+        <p className="page-eyebrow">Removal Intake</p>
+        <h1 className="page-title">Request number removal.</h1>
+        <p className="page-lede">
+          Removal never happens instantly. Request opens seven-day contest
+          window. Uncontested requests auto-resolve. Disputes escalate for
+          review.
+        </p>
+      </section>
 
-      {error && <p className="mt-4 text-red-600">{error}</p>}
+      <Card className="max-w-2xl">
+        <CardBody className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <Input
+              label="Phone Number"
+              {...register("phoneNumber")}
+              error={errors.phoneNumber?.message}
+              placeholder="+63 917 123 4567"
+            />
+            <Input
+              label="Country Code"
+              {...register("country")}
+              error={errors.country?.message}
+              placeholder="PH"
+            />
+            <Select
+              label="Reason"
+              options={reasons}
+              {...register("reason")}
+              error={errors.reason?.message}
+            />
+            <div className="space-y-2">
+              <TurnstileWidget
+                onVerify={(token) => setValue("turnstileToken", token)}
+                onError={() => setValue("turnstileToken", "")}
+              />
+              {errors.turnstileToken && (
+                <p className="text-sm text-red-600">
+                  {errors.turnstileToken.message}
+                </p>
+              )}
+            </div>
+            <Button type="submit" loading={loading}>
+              Submit request
+            </Button>
+          </form>
+
+          {error && <p className="text-red-600">{error}</p>}
+        </CardBody>
+      </Card>
 
       {result && (
-        <Card className="mt-6">
-          <CardBody>
-            <p className="font-medium text-gray-900 mb-2">
+        <Card className="max-w-2xl">
+          <CardBody className="space-y-3">
+            <p className="font-semibold text-slate-950">
               Removal request submitted.
             </p>
-            <p className="text-sm text-gray-600 mb-1">
+            <p className="text-sm text-slate-600">
               Masked number: {result.maskedNumber}
             </p>
-            <p className="text-sm text-gray-600 mb-2">
+            <p className="text-sm text-slate-600">
               Contest deadline:{" "}
               {result.contestDeadline &&
                 new Date(result.contestDeadline).toLocaleDateString()}
             </p>
             <Link
               to={`/removal/${result.removalRequestId}`}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm font-semibold text-blue-700 hover:text-blue-900"
             >
               View removal request
             </Link>

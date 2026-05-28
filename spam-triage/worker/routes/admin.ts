@@ -1,6 +1,7 @@
 import { json, jsonError } from "../lib/http.ts";
 import { readJsonObject } from "../lib/request.ts";
 import { AdminResolveBodySchema } from "../lib/validation.ts";
+import { getAdminRemovalRequestsApiPath } from "../../shared/admin-paths.ts";
 import type { Env } from "../types.ts";
 
 function requireAdmin(request: Request, env: Env): Response | null {
@@ -119,8 +120,11 @@ export async function handleAdminResolve(
   if (denied) return denied;
 
   const url = new URL(request.url);
+  const adminRemovalRequestsApiPath = getAdminRemovalRequestsApiPath(
+    env.HIDDEN_ADMIN_PATH,
+  );
   const match = url.pathname.match(
-    /\/api\/admin\/removal-requests\/(\d+)\/resolve/,
+    new RegExp(`^${adminRemovalRequestsApiPath}/(\\d+)/resolve$`),
   );
   if (!match) {
     return jsonError("Invalid removal request ID", 400, "VALIDATION_ERROR");

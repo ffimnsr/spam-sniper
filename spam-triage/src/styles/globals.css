@@ -1,10 +1,219 @@
 @import "tailwindcss";
 
+@layer theme {
+  :root {
+    --page-bg: #dfeefe;
+    --page-ink: #0f2542;
+    --panel-border: rgba(142, 175, 214, 0.46);
+    --panel-shadow: 0 24px 60px rgba(52, 85, 128, 0.18);
+    --brand-blue: #2d89ff;
+    --brand-blue-deep: #0f5fc7;
+    --brand-sky: #7ab6ff;
+  }
+}
+
 @layer base {
+  html {
+    min-height: 100%;
+    background:
+      radial-gradient(circle at 12% 10%, rgba(255, 255, 255, 0.96), transparent 26%),
+      radial-gradient(circle at 86% 16%, rgba(122, 182, 255, 0.34), transparent 24%),
+      radial-gradient(circle at 50% 100%, rgba(195, 223, 255, 0.52), transparent 38%),
+      linear-gradient(180deg, #edf5ff 0%, var(--page-bg) 100%);
+  }
+
   body {
+    min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    color: #111827;
-    background-color: #f9fafb;
+    color: var(--page-ink);
+    background: transparent;
+    font-family:
+      "SF Pro Display", "SF Pro Text", "Segoe UI", "Helvetica Neue",
+      sans-serif;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+
+  a {
+    transition:
+      color 160ms ease,
+      border-color 160ms ease,
+      background-color 160ms ease,
+      transform 160ms ease;
+  }
+}
+
+@layer components {
+  .app-shell {
+    position: relative;
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .app-shell__glow {
+    position: absolute;
+    inset: auto;
+    z-index: 0;
+    height: 18rem;
+    width: 18rem;
+    border-radius: 9999px;
+    filter: blur(56px);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .app-shell__glow--left {
+    top: 6rem;
+    left: -4rem;
+    background: rgba(125, 188, 255, 0.45);
+  }
+
+  .app-shell__glow--right {
+    top: 18rem;
+    right: -5rem;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .app-topbar,
+  .app-footer,
+  .app-panel {
+    position: relative;
+    z-index: 1;
+  }
+
+  .app-topbar {
+    padding-top: 1rem;
+  }
+
+  .app-brand {
+    display: flex;
+    flex-direction: column;
+    color: var(--page-ink);
+  }
+
+  .app-brand__eyebrow {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(15, 37, 66, 0.56);
+  }
+
+  .app-brand__name {
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+
+  .app-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .app-nav__link {
+    border-radius: 9999px;
+    border: 1px solid rgba(150, 178, 212, 0.54);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.74) 0%,
+      rgba(255, 255, 255, 0.44) 100%
+    );
+    padding: 0.7rem 1rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: rgba(15, 37, 66, 0.8);
+    backdrop-filter: blur(18px);
+    box-shadow: 0 14px 32px rgba(92, 132, 184, 0.12);
+  }
+
+  .app-nav__link:hover {
+    transform: translateY(-1px);
+    color: var(--page-ink);
+  }
+
+  .app-panel {
+    width: 100%;
+    border: 1px solid var(--panel-border);
+    border-radius: 2rem;
+    background:
+      radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 28%),
+      radial-gradient(circle at 88% 20%, rgba(130, 189, 255, 0.42), transparent 24%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(241, 248, 255, 0.62) 100%);
+    box-shadow: var(--panel-shadow);
+    backdrop-filter: blur(20px);
+    padding: 1.5rem;
+  }
+
+  .app-footer {
+    margin-top: auto;
+    padding-bottom: 1rem;
+  }
+
+  .page-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .page-hero {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(150, 178, 212, 0.46);
+    border-radius: 1.75rem;
+    background:
+      radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.14) 48%, transparent 70%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(246, 251, 255, 0.66) 100%);
+    padding: 1.6rem;
+    box-shadow: 0 18px 42px rgba(99, 140, 196, 0.12);
+  }
+
+  .page-eyebrow {
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(15, 37, 66, 0.54);
+  }
+
+  .page-title {
+    margin-top: 0.55rem;
+    font-size: clamp(2rem, 4.4vw, 3.7rem);
+    line-height: 0.98;
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    color: #09223f;
+  }
+
+  .page-lede {
+    margin-top: 1rem;
+    max-width: 44rem;
+    font-size: 1rem;
+    line-height: 1.75;
+    color: rgba(15, 37, 66, 0.74);
+  }
+
+  .info-grid {
+    display: grid;
+    gap: 1rem;
+  }
+
+  @media (min-width: 768px) {
+    .app-panel {
+      padding: 2rem;
+    }
+
+    .page-hero {
+      padding: 2rem;
+    }
+
+    .info-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
   }
 }

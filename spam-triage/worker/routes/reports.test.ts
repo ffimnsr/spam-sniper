@@ -34,12 +34,10 @@ class MockStatement {
   readonly runResult: { meta: { last_row_id: number } };
   private params: unknown[] = [];
   private readonly state: MockState;
-  private readonly db: MockDb;
 
-  constructor(sql: string, state: MockState, db: MockDb) {
+  constructor(sql: string, state: MockState) {
     this.sql = sql;
     this.state = state;
-    this.db = db;
     this.runResult = { meta: { last_row_id: 0 } };
   }
 
@@ -150,7 +148,7 @@ class MockDb {
   }
 
   prepare(sql: string) {
-    return new MockStatement(sql, this.state, this);
+    return new MockStatement(sql, this.state);
   }
 }
 
@@ -169,6 +167,7 @@ function makeEnv(state: MockState): Env {
     HASH_SECRET: "test-secret",
     TURNSTILE_SECRET_KEY: "test-turnstile",
     ADMIN_PASSWORD: "admin",
+    HIDDEN_ADMIN_PATH: "/hidden-review-path",
   };
 }
 

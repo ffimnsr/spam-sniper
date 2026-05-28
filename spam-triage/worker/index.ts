@@ -5,6 +5,10 @@ import {
   handleAdminResolve,
   handleAdminSummary,
 } from "./routes/admin.ts";
+import {
+  getAdminRemovalRequestsApiPath,
+  getAdminSummaryApiPath,
+} from "../shared/admin-paths.ts";
 import { handleCheckNumber } from "./routes/numbers.ts";
 import {
   handleContestRemovalRequest,
@@ -21,13 +25,17 @@ export default {
     _ctx: ExecutionContext,
   ): Promise<Response> {
     const url = new URL(request.url);
+    const adminRoute = env.HIDDEN_ADMIN_PATH;
+    const adminSummaryApiPath = getAdminSummaryApiPath(adminRoute);
+    const adminRemovalRequestsApiPath =
+      getAdminRemovalRequestsApiPath(adminRoute);
 
     if (url.pathname.startsWith("/api/")) {
       try {
         if (url.pathname === "/api/health" && request.method === "GET") {
           return json({
             ok: true,
-            name: "spam-triage",
+            name: "Spam Sniper",
             env: "production",
           });
         }
@@ -52,16 +60,18 @@ export default {
           return handleContestRemovalRequest(request, env);
         }
 
-        if (url.pathname === "/api/admin/summary") {
+        if (url.pathname === adminSummaryApiPath) {
           return handleAdminSummary(request, env);
         }
 
-        if (url.pathname === "/api/admin/removal-requests") {
+        if (url.pathname === adminRemovalRequestsApiPath) {
           return handleAdminRemovalRequests(request, env);
         }
 
         if (
-          url.pathname.match(/^\/api\/admin\/removal-requests\/\d+\/resolve$/)
+          url.pathname.match(
+            new RegExp(`^${adminRemovalRequestsApiPath}/\\d+/resolve$`),
+          )
         ) {
           return handleAdminResolve(request, env);
         }

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  buildAdminResolveApiPath,
+  getAdminSummaryApiPath,
+} from "../../shared/admin-paths.ts";
 import type { Env } from "../types.ts";
 import { handleAdminResolve, handleAdminSummary } from "./admin.ts";
+
+const hiddenAdminPath = "/intake/review/queue/manual/escalations/window/f4c9";
 
 class MockStatement {
   private readonly sql: string;
@@ -145,12 +151,13 @@ describe("handleAdminResolve", () => {
       HASH_SECRET: "secret",
       TURNSTILE_SECRET_KEY: "turnstile",
       ADMIN_PASSWORD: "admin",
+      HIDDEN_ADMIN_PATH: hiddenAdminPath,
     };
   });
 
   it("approves removal", async () => {
     const request = new Request(
-      "https://example.com/api/admin/removal-requests/7/resolve",
+      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
       {
         method: "POST",
         headers: {
@@ -173,7 +180,7 @@ describe("handleAdminResolve", () => {
     state.uniqueReporters = 3;
 
     const request = new Request(
-      "https://example.com/api/admin/removal-requests/7/resolve",
+      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
       {
         method: "POST",
         headers: {
@@ -194,7 +201,7 @@ describe("handleAdminResolve", () => {
 
   it("marks as disputed", async () => {
     const request = new Request(
-      "https://example.com/api/admin/removal-requests/7/resolve",
+      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
       {
         method: "POST",
         headers: {
@@ -214,7 +221,7 @@ describe("handleAdminResolve", () => {
 
   it("rejects request without admin auth", async () => {
     const request = new Request(
-      "https://example.com/api/admin/removal-requests/7/resolve",
+      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -228,7 +235,7 @@ describe("handleAdminResolve", () => {
 
   it("rejects invalid action", async () => {
     const request = new Request(
-      "https://example.com/api/admin/removal-requests/7/resolve",
+      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
       {
         method: "POST",
         headers: {
@@ -266,13 +273,17 @@ describe("handleAdminSummary", () => {
       HASH_SECRET: "secret",
       TURNSTILE_SECRET_KEY: "turnstile",
       ADMIN_PASSWORD: "admin",
+      HIDDEN_ADMIN_PATH: hiddenAdminPath,
     };
   });
 
   it("returns summary counts", async () => {
-    const request = new Request("https://example.com/api/admin/summary", {
-      headers: { Authorization: "Bearer admin" },
-    });
+    const request = new Request(
+      `https://example.com${getAdminSummaryApiPath(hiddenAdminPath)}`,
+      {
+        headers: { Authorization: "Bearer admin" },
+      },
+    );
 
     const response = await handleAdminSummary(request, env);
     const body = (await response.json()) as Record<string, unknown>;
@@ -290,7 +301,9 @@ describe("handleAdminSummary", () => {
   });
 
   it("rejects request without admin auth", async () => {
-    const request = new Request("https://example.com/api/admin/summary");
+    const request = new Request(
+      `https://example.com${getAdminSummaryApiPath(hiddenAdminPath)}`,
+    );
     const response = await handleAdminSummary(request, env);
     expect(response.status).toBe(401);
   });

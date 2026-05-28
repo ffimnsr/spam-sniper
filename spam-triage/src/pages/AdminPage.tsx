@@ -28,10 +28,12 @@ export default function AdminPage() {
         getAdminRemovalRequests(pwd),
       ]);
       setSummary(sumRes);
-      setRequests(reqRes.requests);
+      setRequests(Array.isArray(reqRes.requests) ? reqRes.requests : []);
       setAuthenticated(true);
     } catch (e) {
       setError(String(e));
+      setSummary(null);
+      setRequests([]);
       setAuthenticated(false);
     } finally {
       setLoading(false);
@@ -57,77 +59,108 @@ export default function AdminPage() {
 
   if (!authenticated) {
     return (
-      <div className="max-w-md">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Admin Access</h2>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <Input
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter admin password"
-          />
-          <Button type="submit" loading={loading}>
-            Login
-          </Button>
-        </form>
-        {error && <p className="mt-4 text-red-600">{error}</p>}
+      <div className="page-stack max-w-2xl">
+        <section className="page-hero">
+          <p className="page-eyebrow">Review Queue</p>
+          <h1 className="page-title">Review access.</h1>
+          <p className="page-lede">
+            Enter review password to open pending and contested removal cases.
+          </p>
+        </section>
+        <Card>
+          <CardBody className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-4">
+              <Input
+                label="Password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter review password"
+              />
+              <Button type="submit" loading={loading}>
+                Unlock
+              </Button>
+            </form>
+            {error && <p className="text-red-600">{error}</p>}
+          </CardBody>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <h2 className="text-xl font-bold text-gray-900">Admin Dashboard</h2>
+    <div className="page-stack">
+      <section className="page-hero">
+        <p className="page-eyebrow">Review Queue</p>
+        <h1 className="page-title">Admin dashboard.</h1>
+        <p className="page-lede">
+          Moderation summary plus contested or open removals waiting for manual
+          resolution.
+        </p>
+      </section>
 
       {summary && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card>
             <CardBody>
-              <p className="text-sm text-gray-500">Total Numbers</p>
-              <p className="text-2xl font-bold">{summary.totalNumbers}</p>
+              <p className="text-sm text-slate-500">Total Numbers</p>
+              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                {summary.totalNumbers}
+              </p>
             </CardBody>
           </Card>
           <Card>
             <CardBody>
-              <p className="text-sm text-gray-500">Pending</p>
-              <p className="text-2xl font-bold">{summary.pending}</p>
+              <p className="text-sm text-slate-500">Pending</p>
+              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                {summary.pending}
+              </p>
             </CardBody>
           </Card>
           <Card>
             <CardBody>
-              <p className="text-sm text-gray-500">Suspected</p>
-              <p className="text-2xl font-bold">{summary.suspected}</p>
+              <p className="text-sm text-slate-500">Suspected</p>
+              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                {summary.suspected}
+              </p>
             </CardBody>
           </Card>
           <Card>
             <CardBody>
-              <p className="text-sm text-gray-500">Verified Spam</p>
-              <p className="text-2xl font-bold">{summary.verifiedSpam}</p>
+              <p className="text-sm text-slate-500">Verified Spam</p>
+              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                {summary.verifiedSpam}
+              </p>
             </CardBody>
           </Card>
           <Card>
             <CardBody>
-              <p className="text-sm text-gray-500">Under Review</p>
-              <p className="text-2xl font-bold">{summary.underRemovalReview}</p>
+              <p className="text-sm text-slate-500">Under Review</p>
+              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                {summary.underRemovalReview}
+              </p>
             </CardBody>
           </Card>
           <Card>
             <CardBody>
-              <p className="text-sm text-gray-500">Disputed</p>
-              <p className="text-2xl font-bold">{summary.disputed}</p>
+              <p className="text-sm text-slate-500">Disputed</p>
+              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                {summary.disputed}
+              </p>
             </CardBody>
           </Card>
           <Card>
             <CardBody>
-              <p className="text-sm text-gray-500">Removed</p>
-              <p className="text-2xl font-bold">{summary.removed}</p>
+              <p className="text-sm text-slate-500">Removed</p>
+              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+                {summary.removed}
+              </p>
             </CardBody>
           </Card>
           <Card>
             <CardBody>
-              <p className="text-sm text-gray-500">Open Requests</p>
-              <p className="text-2xl font-bold">
+              <p className="text-sm text-slate-500">Open Requests</p>
+              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
                 {summary.openRemovalRequests}
               </p>
             </CardBody>
@@ -135,50 +168,60 @@ export default function AdminPage() {
         </div>
       )}
 
-      <h3 className="text-lg font-semibold text-gray-900">
-        Removal Requests (Open / Contested)
-      </h3>
-      {requests.length === 0 ? (
-        <p className="text-gray-600">No open or contested requests.</p>
-      ) : (
-        <div className="space-y-3">
-          {requests.map((req) => (
-            <Card key={req.id}>
-              <CardBody>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold">{req.display_mask}</span>
-                  <StatusBadge status={req.status} />
-                </div>
-                <p className="text-sm text-gray-600">
-                  Reason: {req.reason} · Contests: {req.contest_count} ·
-                  Deadline:{" "}
-                  {new Date(req.contest_deadline).toLocaleDateString()}
-                </p>
-                <div className="flex gap-2 mt-3">
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleResolve(req.id, "approve_removal")}
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleResolve(req.id, "reject_removal")}
-                  >
-                    Reject
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleResolve(req.id, "mark_disputed")}
-                  >
-                    Mark Disputed
-                  </Button>
-                </div>
-              </CardBody>
-            </Card>
-          ))}
-        </div>
-      )}
+      <Card className="max-w-5xl">
+        <CardBody className="space-y-4">
+          <div className="space-y-2">
+            <p className="page-eyebrow">Manual Actions</p>
+            <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+              Open and contested removals.
+            </h2>
+          </div>
+          {error && <p className="text-red-600">{error}</p>}
+          {requests.length === 0 ? (
+            <p className="text-slate-600">No open or contested requests.</p>
+          ) : (
+            <div className="space-y-3">
+              {requests.map((req) => (
+                <Card key={req.id}>
+                  <CardBody>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-slate-950">
+                        {req.display_mask}
+                      </span>
+                      <StatusBadge status={req.status} />
+                    </div>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Reason: {req.reason} · Contests: {req.contest_count} ·
+                      Deadline:{" "}
+                      {new Date(req.contest_deadline).toLocaleDateString()}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleResolve(req.id, "approve_removal")}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleResolve(req.id, "reject_removal")}
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleResolve(req.id, "mark_disputed")}
+                      >
+                        Mark disputed
+                      </Button>
+                    </div>
+                  </CardBody>
+                </Card>
+              ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
     </div>
   );
 }

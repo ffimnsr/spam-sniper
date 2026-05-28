@@ -21,19 +21,19 @@ export function Input({
   return (
     <div className="space-y-1">
       {label && (
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-semibold text-slate-700">
           {label}
         </label>
       )}
       <input
         className={cn(
-          "block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm",
-          error && "border-red-500",
+          "block w-full rounded-2xl border border-[rgba(150,178,212,0.46)] bg-white/80 px-4 py-3 text-sm text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] outline-none ring-0 placeholder:text-slate-400 focus:border-blue-400 focus:ring-4 focus:ring-blue-100",
+          error && "border-red-400 focus:border-red-400 focus:ring-red-100",
           className,
         )}
         {...props}
       />
-      {helper && !error && <p className="text-sm text-gray-500">{helper}</p>}
+      {helper && !error && <p className="text-sm text-slate-500">{helper}</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );

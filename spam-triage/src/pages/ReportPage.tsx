@@ -82,60 +82,72 @@ export default function ReportPage() {
   };
 
   return (
-    <div className="max-w-xl">
-      <h2 className="text-xl font-bold text-gray-900 mb-4">
-        Report a Spam Number
-      </h2>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <Input
-          label="Phone Number"
-          {...register("phoneNumber")}
-          error={errors.phoneNumber?.message}
-          placeholder="+63 917 123 4567"
-        />
-        <Input
-          label="Country Code"
-          {...register("country")}
-          error={errors.country?.message}
-          placeholder="PH"
-        />
-        <Select
-          label="Category"
-          options={categories}
-          {...register("category")}
-          error={errors.category?.message}
-        />
-        <div>
-          <TurnstileWidget
-            onVerify={(token) => setValue("turnstileToken", token)}
-            onError={() => setValue("turnstileToken", "")}
-          />
-          {errors.turnstileToken && (
-            <p className="text-sm text-red-600">
-              {errors.turnstileToken.message}
-            </p>
-          )}
-        </div>
-        <Button type="submit" loading={loading}>
-          Submit Report
-        </Button>
-      </form>
+    <div className="page-stack">
+      <section className="page-hero">
+        <p className="page-eyebrow">Write Signal</p>
+        <h1 className="page-title">Report spam caller.</h1>
+        <p className="page-lede">
+          Submit category-based signal. Each unique reporter adds confidence.
+          Turnstile challenge blocks bulk abuse.
+        </p>
+      </section>
 
-      {error && <p className="mt-4 text-red-600">{error}</p>}
+      <Card className="max-w-2xl">
+        <CardBody className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <Input
+              label="Phone Number"
+              {...register("phoneNumber")}
+              error={errors.phoneNumber?.message}
+              placeholder="+63 917 123 4567"
+            />
+            <Input
+              label="Country Code"
+              {...register("country")}
+              error={errors.country?.message}
+              placeholder="PH"
+            />
+            <Select
+              label="Category"
+              options={categories}
+              {...register("category")}
+              error={errors.category?.message}
+            />
+            <div className="space-y-2">
+              <TurnstileWidget
+                onVerify={(token) => setValue("turnstileToken", token)}
+                onError={() => setValue("turnstileToken", "")}
+              />
+              {errors.turnstileToken && (
+                <p className="text-sm text-red-600">
+                  {errors.turnstileToken.message}
+                </p>
+              )}
+            </div>
+            <Button type="submit" loading={loading}>
+              Submit report
+            </Button>
+          </form>
+
+          {error && <p className="text-red-600">{error}</p>}
+        </CardBody>
+      </Card>
 
       {result && (
-        <Card className="mt-6">
-          <CardBody>
-            <p className="font-medium text-gray-900 mb-2">
+        <Card className="max-w-2xl">
+          <CardBody className="space-y-3">
+            <p className="font-semibold text-slate-950">
               {result.duplicate
-                ? "You have already reported this number."
-                : "Report submitted successfully."}
+                ? "You already reported this number."
+                : "Report submitted."}
             </p>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="font-semibold">{result.maskedNumber}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-slate-950">
+                {result.maskedNumber}
+              </span>
               {result.status && <StatusBadge status={result.status} />}
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-slate-600">
               Total reports: {result.reportCount}
               {result.uniqueReporterCount !== undefined &&
                 ` · Unique reporters: ${result.uniqueReporterCount}`}
