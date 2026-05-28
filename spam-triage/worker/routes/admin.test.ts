@@ -13,6 +13,13 @@ import {
   handleAdminSummary,
 } from "./admin.ts";
 
+function mockTurnstileResponse(success: boolean) {
+  return new Response(JSON.stringify({ success }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 const hiddenAdminPath = "/intake/review/queue/manual/escalations/window/f4c9";
 
 class MockStatement {
@@ -206,10 +213,7 @@ describe("handleAdminResolve", () => {
     vi.restoreAllMocks();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: true }),
-      } satisfies Partial<Response>),
+      vi.fn().mockResolvedValue(mockTurnstileResponse(true)),
     );
     state = {
       removalRequest: { id: 7, numberId: 11, status: "open" },
@@ -464,10 +468,7 @@ describe("handleAdminSummary", () => {
   it("rejects admin login when Turnstile fails", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: false }),
-      } satisfies Partial<Response>),
+      vi.fn().mockResolvedValue(mockTurnstileResponse(false)),
     );
 
     const request = new Request(

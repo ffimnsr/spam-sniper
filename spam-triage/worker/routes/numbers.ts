@@ -19,11 +19,7 @@ export async function handleCheckNumber(
     return bodyResult.response;
   }
 
-  const parsed = CheckQuerySchema.safeParse({
-    number: bodyResult.value.number,
-    country: bodyResult.value.country,
-    turnstileToken: bodyResult.value.turnstileToken,
-  });
+  const parsed = CheckQuerySchema.safeParse(bodyResult.value);
   if (!parsed.success) {
     return jsonError("Invalid request body", 400, "VALIDATION_ERROR");
   }

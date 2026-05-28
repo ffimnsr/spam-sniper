@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { handleCheckNumber } from "./numbers.ts";
 
+function mockTurnstileResponse(success: boolean) {
+  return new Response(JSON.stringify({ success }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 class MockStatement {
   private readonly sql: string;
   private readonly state: {
@@ -64,10 +71,7 @@ describe("handleCheckNumber", () => {
     vi.restoreAllMocks();
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: true }),
-      } satisfies Partial<Response>),
+      vi.fn().mockResolvedValue(mockTurnstileResponse(true)),
     );
   });
 
@@ -229,10 +233,7 @@ describe("handleCheckNumber", () => {
   it("rejects Turnstile verification failure", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({ success: false }),
-      } satisfies Partial<Response>),
+      vi.fn().mockResolvedValue(mockTurnstileResponse(false)),
     );
 
     const env = {
