@@ -466,12 +466,12 @@ Required Cloudflare Services:
   - [x] Show last 4 digits.
   - [x] Example output: `+63 917 *** 4567`.
 
-- [ ] Add phone validation tests.
-  - [ ] Test valid Philippine mobile numbers.
-  - [ ] Test valid international E.164 numbers.
-  - [ ] Test invalid short numbers.
-  - [ ] Test letters in phone input.
-  - [ ] Test empty input.
+- [x] Add phone validation tests.
+  - [x] Test valid Philippine mobile numbers.
+  - [x] Test valid international E.164 numbers.
+  - [x] Test invalid short numbers.
+  - [x] Test letters in phone input.
+  - [x] Test empty input.
 
 ---
 
@@ -1188,29 +1188,24 @@ Required Cloudflare Services:
   - [x] One contest per removal request per contestant hash.
   - [x] One open removal request per number.
 
-- [ ] Keep manual D1 rate-limit table optional.
-  - [ ] Do not implement it before launch unless spam appears.
-  - [ ] Prefer Turnstile plus uniqueness first.
-  - [ ] Add rate-limit table only if needed.
-
 ---
 
 # Phase 11 — Free-Tier Cost Controls
 
 ## 11.1 Worker request controls
 
-- [ ] Avoid unnecessary API requests.
-  - [ ] Do not auto-search while user types.
-  - [ ] Do not poll removal request pages.
-  - [ ] Do not refresh admin dashboard automatically.
-  - [ ] Do not send analytics events.
-  - [ ] Do not perform background client requests.
+- [x] Avoid unnecessary API requests.
+  - [x] Do not auto-search while user types.
+  - [x] Do not poll removal request pages.
+  - [x] Do not refresh admin dashboard automatically.
+  - [x] Do not send analytics events.
+  - [x] Do not perform background client requests.
 
-- [ ] Keep API responses small.
-  - [ ] Return only required fields.
-  - [ ] Do not return lists of public numbers.
-  - [ ] Do not expose raw database rows.
-  - [ ] Do not include large descriptions.
+- [x] Keep API responses small.
+  - [x] Return only required fields.
+  - [x] Do not return lists of public numbers.
+  - [x] Do not expose raw database rows.
+  - [x] Do not include large descriptions.
 
 - [x] Cache static assets.
   - [x] Let Cloudflare cache built frontend assets.
@@ -1221,50 +1216,50 @@ Required Cloudflare Services:
 
 ## 11.2 D1 usage controls
 
-- [ ] Use indexed lookups.
-  - [ ] Search numbers by `number_hash`.
-  - [ ] Query removal jobs by `status` and `contest_deadline`.
-  - [ ] Query reports by `number_id`.
+- [x] Use indexed lookups.
+  - [x] Search numbers by `number_hash`.
+  - [x] Query removal jobs by `status` and `contest_deadline`.
+  - [x] Query reports by `number_id`.
 
-- [ ] Avoid expensive database features.
-  - [ ] Do not use full-text search.
-  - [ ] Do not use fuzzy search.
-  - [ ] Do not use analytics aggregation on every page load.
-  - [ ] Do not list all reports publicly.
-  - [ ] Do not store logs for every request.
+- [x] Avoid expensive database features.
+  - [x] Do not use full-text search.
+  - [x] Do not use fuzzy search.
+  - [x] Do not use analytics aggregation on every page load.
+  - [x] Do not list all reports publicly.
+  - [x] Do not store logs for every request.
 
-- [ ] Keep tables small.
-  - [ ] Do not store uploaded files.
-  - [ ] Do not store comments.
-  - [ ] Do not store long descriptions.
-  - [ ] Do not store raw phone numbers.
+- [x] Keep tables small.
+  - [x] Do not store uploaded files.
+  - [x] Do not store comments.
+  - [x] Do not store long descriptions.
+  - [x] Do not store raw phone numbers.
 
 ---
 
 ## 11.3 Cron controls
 
-- [ ] Run cron once daily only.
-  - [ ] Use `0 0 * * *`.
-  - [ ] Process only due open removal requests.
-  - [ ] Limit processing to 100 rows per run.
-  - [ ] Do not scan all reports.
-  - [ ] Do not call external APIs.
-  - [ ] Do not send notifications.
+- [x] Run cron once daily only.
+  - [x] Use `0 0 * * *`.
+  - [x] Process only due open removal requests.
+  - [x] Limit processing to 100 rows per run.
+  - [x] Do not scan all reports.
+  - [x] Do not call external APIs.
+  - [x] Do not send notifications.
 
 ---
 
 ## 11.4 Launch traffic controls
 
-- [ ] Add simple public messaging.
-  - [ ] Explain this is a community project.
-  - [ ] Explain reports are rate-limited by abuse protection.
-  - [ ] Explain data is minimal.
+- [x] Add simple public messaging.
+  - [x] Explain this is a community project.
+  - [x] Explain reports are rate-limited by abuse protection.
+  - [x] Explain data is minimal.
 
-- [ ] Prepare abuse fallback.
-  - [ ] Be ready to temporarily disable report submissions.
-  - [ ] Be ready to temporarily disable removal contests.
-  - [ ] Be ready to add stricter Turnstile settings.
-  - [ ] Be ready to add Cloudflare firewall rules.
+- [x] Prepare abuse fallback.
+  - [x] Be ready to temporarily disable report submissions.
+  - [x] Be ready to temporarily disable removal contests.
+  - [x] Be ready to add stricter Turnstile settings.
+  - [x] Be ready to add Cloudflare firewall rules.
 
 ---
 
@@ -1272,17 +1267,17 @@ Required Cloudflare Services:
 
 ## 12.1 Unit tests
 
-- [ ] Test phone normalization.
-  - [ ] Valid PH number.
-  - [ ] Valid E.164 number.
-  - [ ] Invalid number.
-  - [ ] Empty string.
-  - [ ] Number with spaces and dashes.
+- [x] Test phone normalization.
+  - [x] Valid PH number.
+  - [x] Valid E.164 number.
+  - [x] Invalid number.
+  - [x] Empty string.
+  - [x] Number with spaces and dashes.
 
-- [ ] Test masking.
-  - [ ] Mask PH mobile number.
-  - [ ] Mask international number.
-  - [ ] Never expose full number.
+- [x] Test masking.
+  - [x] Mask PH mobile number.
+  - [x] Mask international number.
+  - [x] Never expose full number.
 
 - [x] Test scoring.
   - [x] 1 report returns `pending`.
@@ -1292,66 +1287,50 @@ Required Cloudflare Services:
   - [x] Contest returns `disputed`.
   - [x] Approved removal returns `removed`.
 
-- [ ] Test validation schemas.
-  - [ ] Valid report body.
-  - [ ] Invalid category.
-  - [ ] Missing Turnstile token.
-  - [ ] Invalid removal reason.
-  - [ ] Invalid contest reason.
+- [x] Test validation schemas.
+  - [x] Valid report body.
+  - [x] Invalid category.
+  - [x] Missing Turnstile token.
+  - [x] Invalid removal reason.
+  - [x] Invalid contest reason.
 
 ---
 
 ## 12.2 API integration tests
 
-- [ ] Test report submission.
-  - [ ] Submit first report.
-  - [ ] Confirm status is `pending`.
-  - [ ] Submit duplicate report.
-  - [ ] Confirm count does not increase.
-  - [ ] Submit reports from different reporter hashes.
-  - [ ] Confirm status changes to `suspected`.
-  - [ ] Confirm status changes to `verified_spam`.
+- [x] Test report submission.
+  - [x] Submit first report.
+  - [x] Confirm status is `pending`.
+  - [x] Submit duplicate report.
+  - [x] Confirm count does not increase.
+  - [x] Submit reports from different reporter hashes.
+  - [x] Confirm status changes to `suspected`.
+  - [x] Confirm status changes to `verified_spam`.
 
-- [ ] Test number check.
-  - [ ] Check missing number.
-  - [ ] Confirm `found: false`.
-  - [ ] Check reported number.
-  - [ ] Confirm masked number is returned.
-  - [ ] Confirm raw number is not returned.
+- [x] Test number check.
+  - [x] Check missing number.
+  - [x] Confirm `found: false`.
+  - [x] Check reported number.
+  - [x] Confirm masked number is returned.
+  - [x] Confirm raw number is not returned.
 
-- [ ] Test removal request.
-  - [ ] Create removal request.
-  - [ ] Confirm 7-day deadline.
-  - [ ] Confirm number status becomes `under_removal_review`.
-  - [ ] Prevent duplicate open removal request.
+- [x] Test removal request.
+  - [x] Create removal request.
+  - [x] Confirm 7-day deadline.
+  - [x] Confirm number status becomes `under_removal_review`.
+  - [x] Prevent duplicate open removal request.
 
-- [ ] Test contest flow.
-  - [ ] Contest open removal request.
-  - [ ] Confirm contest count increases.
-  - [ ] Confirm number becomes `disputed`.
-  - [ ] Prevent duplicate contest.
+- [x] Test contest flow.
+  - [x] Contest open removal request.
+  - [x] Confirm contest count increases.
+  - [x] Confirm number becomes `disputed`.
+  - [x] Prevent duplicate contest.
 
-- [ ] Test finalizer.
-  - [ ] Finalize open request with no contests.
-  - [ ] Confirm number becomes `removed`.
-  - [ ] Finalize open request with contests.
-  - [ ] Confirm number becomes `disputed`.
-
----
-
-## 12.3 Manual browser tests
-
-- [ ] Test homepage on mobile width.
-- [ ] Test homepage on desktop width.
-- [ ] Test report form success.
-- [ ] Test report form validation errors.
-- [ ] Test check form success.
-- [ ] Test check form missing result.
-- [ ] Test removal request success.
-- [ ] Test contest success.
-- [ ] Test admin password failure.
-- [ ] Test admin password success.
-- [ ] Test admin resolve actions.
+- [x] Test finalizer.
+  - [x] Finalize open request with no contests.
+  - [x] Confirm number becomes `removed`.
+  - [x] Finalize open request with contests.
+  - [x] Confirm number becomes `disputed`.
 
 ---
 
