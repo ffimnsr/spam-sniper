@@ -1345,7 +1345,7 @@ Required Cloudflare Services:
   - [ ] Explain database choices.
   - [ ] Explain removal contest process.
   - [ ] Explain local development setup.
-  - [ ] Explain deployment setup.
+  - [x] Explain deployment setup.
   - [ ] Explain Cloudflare services required.
   - [ ] Explain what is intentionally not included.
 

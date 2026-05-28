@@ -7,6 +7,7 @@ Vite + React + TypeScript app with React Compiler enabled.
 - `npm run dev` start Vite dev server.
 - `npm run dev:worker` start local Cloudflare Worker API.
 - `npm run build` type-check and build production bundle.
+- `npm run deploy` build app, apply remote D1 migrations, deploy Worker + static assets.
 - `npm run lint` run Biome checks.
 - `npm run format` apply Biome fixes and formatting.
 - `npm run preview` serve built app locally.
@@ -30,3 +31,10 @@ Vite + React + TypeScript app with React Compiler enabled.
 - Run `npm run dev:worker` in one terminal.
 - Run `npm run dev` in another terminal.
 - Keep `VITE_HIDDEN_ADMIN_PATH` and `HIDDEN_ADMIN_PATH` identical.
+
+## Deploy
+
+- Run `npm run deploy` for default environment.
+- Run `npm run deploy -- --env <name>` for named Wrangler environment.
+- Run `npm run deploy -- --skip-migrations` only if remote schema already current.
+- Set Worker secrets before first deploy: `HASH_SECRET`, `TURNSTILE_SECRET_KEY`, `ADMIN_PASSWORD`.

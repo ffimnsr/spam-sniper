@@ -14,7 +14,7 @@
 		}
 	],
 	"vars": {
-		"HIDDEN_ADMIN_PATH": "/replace/with/non-obvious/admin-path"
+		"HIDDEN_ADMIN_PATH": "/replace-with-random-chars"
 	},
 	"triggers": {
 		"crons": [
