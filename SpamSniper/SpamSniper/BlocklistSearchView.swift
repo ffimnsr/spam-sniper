@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct BlocklistSearchView: View {
     @Bindable var model: SpamBlockerModel
@@ -10,6 +11,14 @@ struct BlocklistSearchView: View {
     @State private var isAddEntryPresented = false
     @State private var editingEntry: PersonalBlocklistEntry?
     @State private var deletingEntry: PersonalBlocklistEntry?
+    @State private var isImportingPersonalList = false
+    @State private var importPreview: PersonalBlocklistImportPreview?
+    @State private var importResult: PersonalBlocklistImportResult?
+    @State private var importErrorMessage: String?
+    @State private var isExportConfirmationPresented = false
+    @State private var isExportingPersonalList = false
+    @State private var exportDocument: PersonalBlocklistExportDocument?
+    @State private var exportErrorMessage: String?
 
     private var palette: AppPalette { AppPalette(colorScheme: colorScheme) }
     private var trimmedQuery: String { model.numberSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -48,21 +57,50 @@ struct BlocklistSearchView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    isAddEntryPresented = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.headline.weight(.semibold))
-                        .foregroundStyle(palette.tint)
-                        .frame(width: 36, height: 36)
-                        .background(.ultraThinMaterial, in: Circle())
-                        .overlay {
-                            Circle()
-                                .strokeBorder(.white.opacity(0.22), lineWidth: 1)
+                HStack(spacing: 10) {
+                    Menu {
+                        Button {
+                            isImportingPersonalList = true
+                        } label: {
+                            Label("Import Personal List", systemImage: "square.and.arrow.down")
                         }
+
+                        Button {
+                            isExportConfirmationPresented = true
+                        } label: {
+                            Label("Export Personal List", systemImage: "square.and.arrow.up")
+                        }
+                        .disabled(model.personalEntries.isEmpty)
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down.circle")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(palette.tint)
+                            .frame(width: 36, height: 36)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(.white.opacity(0.22), lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Import or export personal list")
+
+                    Button {
+                        isAddEntryPresented = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.headline.weight(.semibold))
+                            .foregroundStyle(palette.tint)
+                            .frame(width: 36, height: 36)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .overlay {
+                                Circle()
+                                    .strokeBorder(.white.opacity(0.22), lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Add to personal list")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Add to personal list")
             }
         }
         .sheet(isPresented: $isAddEntryPresented) {
@@ -99,6 +137,104 @@ struct BlocklistSearchView: View {
             Button("Cancel", role: .cancel) {
                 deletingEntry = nil
             }
+        }
+        .fileImporter(
+            isPresented: $isImportingPersonalList,
+            allowedContentTypes: [.personalBlocklistJSONLines, .plainText, .json]
+        ) { result in
+            handleImportSelection(result)
+        }
+        .fileExporter(
+            isPresented: $isExportingPersonalList,
+            document: exportDocument,
+            contentType: .personalBlocklistJSONLines,
+            defaultFilename: "spamsniper-personal-blocklist"
+        ) { result in
+            if case .failure(let error) = result {
+                exportErrorMessage = error.localizedDescription
+            }
+        }
+        .alert(
+            importPreviewTitle,
+            isPresented: Binding(
+                get: { importPreview != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        importPreview = nil
+                    }
+                }
+            )
+        ) {
+            Button("Merge") {
+                mergeImportedEntries()
+            }
+            Button("Cancel", role: .cancel) {
+                importPreview = nil
+            }
+        } message: {
+            Text(importPreviewMessage)
+        }
+        .alert(
+            "Personal List Imported",
+            isPresented: Binding(
+                get: { importResult != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        importResult = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK") {
+                importResult = nil
+            }
+        } message: {
+            Text(importResultMessage)
+        }
+        .alert(
+            "Import Failed",
+            isPresented: Binding(
+                get: { importErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        importErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK") {
+                importErrorMessage = nil
+            }
+        } message: {
+            Text(importErrorMessage ?? "The selected file could not be imported.")
+        }
+        .alert(
+            exportConfirmationTitle,
+            isPresented: $isExportConfirmationPresented
+        ) {
+            Button("Export") {
+                beginExport()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(exportConfirmationMessage)
+        }
+        .alert(
+            "Export Failed",
+            isPresented: Binding(
+                get: { exportErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        exportErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK") {
+                exportErrorMessage = nil
+            }
+        } message: {
+            Text(exportErrorMessage ?? "The personal list could not be exported.")
         }
     }
 
@@ -447,6 +583,42 @@ struct BlocklistSearchView: View {
         }
     }
 
+    private func handleImportSelection(_ result: Result<URL, Error>) {
+        do {
+            let url = try result.get()
+            let didStartAccessing = url.startAccessingSecurityScopedResource()
+            defer {
+                if didStartAccessing {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            let data = try Data(contentsOf: url)
+            importPreview = try model.personalBlocklistStore.previewImport(from: data)
+        } catch {
+            importErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func mergeImportedEntries() {
+        guard let importPreview else { return }
+        self.importPreview = nil
+
+        Task { @MainActor in
+            importResult = model.personalBlocklistStore.mergeImportedEntries(using: importPreview)
+            _ = await model.processPersonalBlocklistChange()
+        }
+    }
+
+    private func beginExport() {
+        do {
+            exportDocument = try PersonalBlocklistExportDocument(data: model.personalBlocklistStore.exportJSONLines())
+            isExportingPersonalList = true
+        } catch {
+            exportErrorMessage = error.localizedDescription
+        }
+    }
+
     private var showsResetAction: Bool {
         !model.numberSearchQuery.isEmpty ||
         !model.numberSearchResults.isEmpty ||
@@ -459,6 +631,74 @@ struct BlocklistSearchView: View {
 
     private var showsSearchSubtitle: Bool {
         verticalSizeClass != .compact || dynamicTypeSize.isAccessibilitySize
+    }
+
+    private var importPreviewTitle: String {
+        guard let importPreview else {
+            return "Merge Imported Entries?"
+        }
+        return "Merge \(importPreview.importedCount) Imported Entries?"
+    }
+
+    private var importPreviewMessage: String {
+        guard let importPreview else {
+            return ""
+        }
+
+        var parts = [
+            "Current total: \(importPreview.currentCount).",
+            "\(importPreview.updatesCount) existing numbers will be updated.",
+            "\(importPreview.additionsCount) new numbers will be added.",
+            "Final total after merge: \(importPreview.mergedTotalCount)."
+        ]
+
+        if importPreview.duplicateCountInImport > 0 {
+            parts.append("\(importPreview.duplicateCountInImport) duplicate lines in the import file were collapsed to the last value for each number.")
+        }
+
+        return parts.joined(separator: " ")
+    }
+
+    private var importResultMessage: String {
+        guard let importResult else {
+            return ""
+        }
+
+        return "\(importResult.importedCount) numbers were imported. \(importResult.updatesCount) existing numbers were updated, \(importResult.additionsCount) new numbers were added, and your personal list now contains \(importResult.finalTotalCount) entries."
+    }
+
+    private var exportConfirmationTitle: String {
+        "Export \(model.personalEntries.count) Personal Entries?"
+    }
+
+    private var exportConfirmationMessage: String {
+        "SpamSniper will export your personal blocklist as JSON Lines (.jsonl)."
+    }
+}
+
+private struct PersonalBlocklistExportDocument: FileDocument {
+    static var readableContentTypes: [UTType] {
+        [.personalBlocklistJSONLines]
+    }
+
+    let data: Data
+
+    init(data: Data) {
+        self.data = data
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
+}
+
+private extension UTType {
+    static var personalBlocklistJSONLines: UTType {
+        UTType(exportedAs: "com.pastel.spamsniper.personal-blocklist-jsonl", conformingTo: .plainText)
     }
 }
 

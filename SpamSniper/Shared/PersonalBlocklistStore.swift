@@ -2,6 +2,40 @@ import Foundation
 
 // MARK: - Model
 
+struct PersonalBlocklistImportPreview {
+    let importedEntries: [PersonalBlocklistEntry]
+    let importedCount: Int
+    let additionsCount: Int
+    let updatesCount: Int
+    let duplicateCountInImport: Int
+    let currentCount: Int
+    let mergedTotalCount: Int
+}
+
+struct PersonalBlocklistImportResult {
+    let importedCount: Int
+    let additionsCount: Int
+    let updatesCount: Int
+    let finalTotalCount: Int
+}
+
+enum PersonalBlocklistTransferError: LocalizedError {
+    case emptyFile
+    case invalidLine(lineNumber: Int)
+    case invalidPhoneNumber(lineNumber: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyFile:
+            return "The selected file does not contain any personal blocklist entries."
+        case .invalidLine(let lineNumber):
+            return "Line \(lineNumber) is not valid JSON."
+        case .invalidPhoneNumber(let lineNumber):
+            return "Line \(lineNumber) does not contain a valid phone number."
+        }
+    }
+}
+
 /// A single entry in the user's personal blocklist.
 struct PersonalBlocklistEntry: Codable, Identifiable, Equatable {
     /// Stable UUID string – never changes after creation.
@@ -160,6 +194,111 @@ final class PersonalBlocklistStore {
         return entries.first { $0.phoneNumber == number }
     }
 
+    func exportJSONLines() throws -> Data {
+        let exportEncoder = JSONEncoder()
+        exportEncoder.dateEncodingStrategy = .iso8601
+        exportEncoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+
+        let lines = try entries.map { entry in
+            let record = PersonalBlocklistTransferRecord(
+                id: entry.id,
+                phoneNumber: entry.phoneNumberE164,
+                displayName: entry.displayName,
+                notes: entry.notes,
+                tags: entry.tags,
+                createdAt: entry.createdAt,
+                updatedAt: entry.updatedAt
+            )
+            let encoded = try exportEncoder.encode(record)
+            guard let line = String(data: encoded, encoding: .utf8) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            return line
+        }
+
+        return Data(lines.joined(separator: "\n").utf8)
+    }
+
+    func previewImport(from data: Data) throws -> PersonalBlocklistImportPreview {
+        guard let contents = String(data: data, encoding: .utf8) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+
+        let currentEntries = entries
+        let currentNumbers = Set(currentEntries.map(\.phoneNumber))
+        var importedByNumber: [Int64: PersonalBlocklistEntry] = [:]
+        var orderedNumbers: [Int64] = []
+        var duplicateCountInImport = 0
+        var parsedLineCount = 0
+
+        for (index, rawLine) in contents.components(separatedBy: .newlines).enumerated() {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+            parsedLineCount += 1
+
+            let lineData = Data(line.utf8)
+            let record: PersonalBlocklistTransferRecord
+            do {
+                record = try decoder.decode(PersonalBlocklistTransferRecord.self, from: lineData)
+            } catch {
+                throw PersonalBlocklistTransferError.invalidLine(lineNumber: index + 1)
+            }
+
+            let entry: PersonalBlocklistEntry
+            do {
+                entry = try record.makeEntry()
+            } catch {
+                throw PersonalBlocklistTransferError.invalidPhoneNumber(lineNumber: index + 1)
+            }
+
+            if importedByNumber.updateValue(entry, forKey: entry.phoneNumber) == nil {
+                orderedNumbers.append(entry.phoneNumber)
+            } else {
+                duplicateCountInImport += 1
+            }
+        }
+
+        guard parsedLineCount > 0 else {
+            throw PersonalBlocklistTransferError.emptyFile
+        }
+
+        let importedEntries = orderedNumbers.compactMap { importedByNumber[$0] }
+        let updatesCount = importedEntries.filter { currentNumbers.contains($0.phoneNumber) }.count
+        let additionsCount = importedEntries.count - updatesCount
+
+        return PersonalBlocklistImportPreview(
+            importedEntries: importedEntries,
+            importedCount: importedEntries.count,
+            additionsCount: additionsCount,
+            updatesCount: updatesCount,
+            duplicateCountInImport: duplicateCountInImport,
+            currentCount: currentEntries.count,
+            mergedTotalCount: currentEntries.count + additionsCount
+        )
+    }
+
+    func mergeImportedEntries(using preview: PersonalBlocklistImportPreview) -> PersonalBlocklistImportResult {
+        var mergedEntriesByNumber = Dictionary(uniqueKeysWithValues: entries.map { ($0.phoneNumber, $0) })
+
+        for entry in preview.importedEntries {
+            mergedEntriesByNumber[entry.phoneNumber] = entry
+        }
+
+        entries = mergedEntriesByNumber.values.sorted { lhs, rhs in
+            if lhs.updatedAt != rhs.updatedAt {
+                return lhs.updatedAt > rhs.updatedAt
+            }
+            return lhs.createdAt > rhs.createdAt
+        }
+
+        return PersonalBlocklistImportResult(
+            importedCount: preview.importedCount,
+            additionsCount: preview.additionsCount,
+            updatesCount: preview.updatesCount,
+            finalTotalCount: mergedEntriesByNumber.count
+        )
+    }
+
     // MARK: Private helpers
 
     private func load() -> [PersonalBlocklistEntry] {
@@ -222,4 +361,87 @@ final class PersonalBlocklistStore {
 
 extension Notification.Name {
     static let personalBlocklistStoreDidChange = Notification.Name("personalBlocklistStoreDidChange")
+}
+
+private struct PersonalBlocklistTransferRecord: Codable {
+    let id: String?
+    let phoneNumber: String
+    let displayName: String?
+    let notes: String?
+    let tags: [String]?
+    let createdAt: Date?
+    let updatedAt: Date?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case phoneNumber
+        case displayName
+        case notes
+        case tags
+        case createdAt
+        case updatedAt
+    }
+
+    init(
+        id: String?,
+        phoneNumber: String,
+        displayName: String?,
+        notes: String?,
+        tags: [String]?,
+        createdAt: Date?,
+        updatedAt: Date?
+    ) {
+        self.id = id
+        self.phoneNumber = phoneNumber
+        self.displayName = displayName
+        self.notes = notes
+        self.tags = tags
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        tags = try container.decodeIfPresent([String].self, forKey: .tags)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
+
+        if let stringValue = try container.decodeIfPresent(String.self, forKey: .phoneNumber) {
+            phoneNumber = stringValue
+        } else if let numericValue = try container.decodeIfPresent(Int64.self, forKey: .phoneNumber) {
+            phoneNumber = "\(numericValue)"
+        } else {
+            throw DecodingError.keyNotFound(
+                CodingKeys.phoneNumber,
+                .init(codingPath: decoder.codingPath, debugDescription: "phoneNumber is required")
+            )
+        }
+    }
+
+    func makeEntry() throws -> PersonalBlocklistEntry {
+        let digits = phoneNumber.filter(\.isNumber)
+        guard !digits.isEmpty, let number = Int64(digits), number > 0 else {
+            throw PersonalBlocklistTransferError.invalidPhoneNumber(lineNumber: 0)
+        }
+
+        let normalizedID = id?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedTags = (tags ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let createdAt = createdAt ?? Date()
+        let updatedAt = updatedAt ?? createdAt
+
+        return PersonalBlocklistEntry(
+            id: normalizedID?.isEmpty == false ? normalizedID! : UUID().uuidString,
+            phoneNumber: number,
+            displayName: displayName ?? "",
+            notes: notes ?? "",
+            tags: normalizedTags,
+            createdAt: createdAt,
+            updatedAt: updatedAt
+        )
+    }
 }
