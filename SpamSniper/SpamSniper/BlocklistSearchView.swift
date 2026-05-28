@@ -140,15 +140,15 @@ struct BlocklistSearchView: View {
         }
         .fileImporter(
             isPresented: $isImportingPersonalList,
-            allowedContentTypes: [.personalBlocklistJSONLines, .plainText, .json]
+            allowedContentTypes: [.plainText, .json]
         ) { result in
             handleImportSelection(result)
         }
         .fileExporter(
             isPresented: $isExportingPersonalList,
             document: exportDocument,
-            contentType: .personalBlocklistJSONLines,
-            defaultFilename: "spamsniper-personal-blocklist"
+            contentType: .plainText,
+            defaultFilename: "spamsniper-personal-blocklist.jsonl"
         ) { result in
             if case .failure(let error) = result {
                 exportErrorMessage = error.localizedDescription
@@ -678,7 +678,7 @@ struct BlocklistSearchView: View {
 
 private struct PersonalBlocklistExportDocument: FileDocument {
     static var readableContentTypes: [UTType] {
-        [.personalBlocklistJSONLines]
+        [.plainText]
     }
     
     let data: Data
@@ -693,12 +693,6 @@ private struct PersonalBlocklistExportDocument: FileDocument {
     
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         FileWrapper(regularFileWithContents: data)
-    }
-}
-
-private extension UTType {
-    nonisolated static var personalBlocklistJSONLines: UTType {
-        UTType(exportedAs: "com.pastel.spamsniper.personal-blocklist-jsonl", conformingTo: .plainText)
     }
 }
 
