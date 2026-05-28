@@ -4,6 +4,8 @@ blocklist/.DS_Store
 blocklist/.gnupg/
 .venv/
 .tmp-docs-venv/
+.wrangler/
+.dev.vars
 
 *.md
 !ISSUES.md

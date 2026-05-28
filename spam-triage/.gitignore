@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Cloudflare / local secrets
+.wrangler
+.dev.vars
+*.db
+*.sqlite
+*.sqlite3
+.env
+wrangler.jsonc

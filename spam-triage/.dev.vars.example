@@ -1,0 +1,3 @@
+HASH_SECRET=dev-hash-secret-change-me-in-production
+TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
+ADMIN_PASSWORD=dev-admin-password-change-me

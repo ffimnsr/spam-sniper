@@ -1,0 +1,21 @@
+{
+	"name": "spam-triage",
+	"main": "worker/index.ts",
+	"compatibility_date": "2025-05-28",
+	"assets": {
+		"directory": "./dist",
+		"binding": "ASSETS"
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "spam-triage-db",
+			"database_id": ""
+		}
+	],
+	"triggers": {
+		"crons": [
+			"0 0 * * *"
+		]
+	}
+}
