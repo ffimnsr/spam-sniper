@@ -1,10 +1,12 @@
 import {
   buildAdminResolveApiPath,
   getAdminExportApiPath,
+  getAdminLoginApiPath,
   getAdminRemovalRequestsApiPath,
   getAdminSummaryApiPath,
 } from "../../shared/admin-paths.ts";
 import { hiddenAdminRoute } from "../lib/admin-path.ts";
+import { apiPost } from "./client.ts";
 
 export interface AdminSummary {
   ok: true;
@@ -65,6 +67,12 @@ export interface AdminExportResponse {
   entries: AdminExportEntry[];
 }
 
+export interface AdminLoginResponse {
+  ok: true;
+  summary: AdminSummary;
+  requests: AdminRemovalRequest[];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -95,11 +103,7 @@ async function apiGetWithAuth<T>(path: string, password: string): Promise<T> {
     headers: { Authorization: `Bearer ${password}` },
   });
   const data = (await res.json().catch(() => null)) as unknown;
-  if (
-    !res.ok ||
-    !isRecord(data) ||
-    data.ok !== true
-  ) {
+  if (!res.ok || !isRecord(data) || data.ok !== true) {
     const { code, message } = getApiErrorDetails(data, res.statusText);
     throw new Error(`${code}: ${message}`);
   }
@@ -120,11 +124,7 @@ async function apiPostWithAuth<T>(
     body: JSON.stringify(body),
   });
   const data = (await res.json().catch(() => null)) as unknown;
-  if (
-    !res.ok ||
-    !isRecord(data) ||
-    data.ok !== true
-  ) {
+  if (!res.ok || !isRecord(data) || data.ok !== true) {
     const { code, message } = getApiErrorDetails(data, res.statusText);
     throw new Error(`${code}: ${message}`);
   }
@@ -136,6 +136,13 @@ export function getAdminSummary(password: string) {
     getAdminSummaryApiPath(hiddenAdminRoute),
     password,
   );
+}
+
+export function loginAdmin(password: string, turnstileToken: string) {
+  return apiPost<AdminLoginResponse>(getAdminLoginApiPath(hiddenAdminRoute), {
+    password,
+    turnstileToken,
+  });
 }
 
 export function getAdminRemovalRequests(password: string) {

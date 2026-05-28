@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildAdminResolveApiPath,
   getAdminExportApiPath,
+  getAdminLoginApiPath,
   getAdminSummaryApiPath,
 } from "../../shared/admin-paths.ts";
 import type { Env } from "../types.ts";
 import {
   handleAdminExport,
+  handleAdminLogin,
   handleAdminResolve,
   handleAdminSummary,
 } from "./admin.ts";
@@ -202,6 +204,13 @@ describe("handleAdminResolve", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      } satisfies Partial<Response>),
+    );
     state = {
       removalRequest: { id: 7, numberId: 11, status: "open" },
       number: { id: 11, status: "under_removal_review", removalRequestId: 7 },
@@ -425,5 +434,55 @@ describe("handleAdminSummary", () => {
     expect(body.entries[0]?.phone_number_e164).toBe("+15551234567");
     expect(body.entries[0]?.display_mask).toBe("+1555 *** 4567");
     expect(body.entries[0]?.category).toBe("bank scam");
+  });
+
+  it("allows admin login with Turnstile and returns bootstrap data", async () => {
+    const request = new Request(
+      `https://example.com${getAdminLoginApiPath(hiddenAdminPath)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          password: "admin",
+          turnstileToken: "token",
+        }),
+      },
+    );
+
+    const response = await handleAdminLogin(request, env);
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.summary).toMatchObject({
+      totalNumbers: 5,
+      openRemovalRequests: 2,
+    });
+    expect(body.requests).toEqual([]);
+  });
+
+  it("rejects admin login when Turnstile fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: false }),
+      } satisfies Partial<Response>),
+    );
+
+    const request = new Request(
+      `https://example.com${getAdminLoginApiPath(hiddenAdminPath)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          password: "admin",
+          turnstileToken: "bad-token",
+        }),
+      },
+    );
+
+    const response = await handleAdminLogin(request, env);
+    expect(response.status).toBe(400);
   });
 });

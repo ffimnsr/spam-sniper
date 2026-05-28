@@ -48,6 +48,14 @@ export const CheckQuerySchema = z
   .object({
     number: z.string().min(1),
     country: z.string().optional(),
+    turnstileToken: z.string().min(1),
+  })
+  .strict();
+
+export const AdminLoginBodySchema = z
+  .object({
+    password: z.string().min(1),
+    turnstileToken: z.string().min(1),
   })
   .strict();
 

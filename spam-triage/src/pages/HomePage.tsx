@@ -60,8 +60,8 @@ export default function HomePage() {
               Your lookup stays private.
             </h2>
             <p className="text-sm leading-7 text-slate-600">
-              Search, report, or request removal without creating account.
-              Phone numbers stay masked on public pages.
+              Search, report, or request removal without creating account. Phone
+              numbers stay masked on public pages.
             </p>
           </CardBody>
         </Card>

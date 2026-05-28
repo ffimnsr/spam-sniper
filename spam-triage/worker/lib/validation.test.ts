@@ -70,12 +70,16 @@ describe("CheckQuerySchema", () => {
     const result = CheckQuerySchema.safeParse({
       number: "+639171234567",
       country: "PH",
+      turnstileToken: "token",
     });
     expect(result.success).toBe(true);
   });
 
   it("accepts check query without country", () => {
-    const result = CheckQuerySchema.safeParse({ number: "+639171234567" });
+    const result = CheckQuerySchema.safeParse({
+      number: "+639171234567",
+      turnstileToken: "token",
+    });
     expect(result.success).toBe(true);
   });
 
@@ -85,7 +89,15 @@ describe("CheckQuerySchema", () => {
   });
 
   it("rejects empty number", () => {
-    const result = CheckQuerySchema.safeParse({ number: "" });
+    const result = CheckQuerySchema.safeParse({
+      number: "",
+      turnstileToken: "token",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing turnstileToken", () => {
+    const result = CheckQuerySchema.safeParse({ number: "+639171234567" });
     expect(result.success).toBe(false);
   });
 });

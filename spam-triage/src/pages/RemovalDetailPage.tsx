@@ -191,7 +191,8 @@ export default function RemovalDetailPage() {
           </div>
           <p className="text-sm text-slate-600">Reason: {detail.reason}</p>
           <p className="text-sm text-slate-600">
-            Contest deadline: {new Date(detail.contestDeadline).toLocaleDateString()}
+            Contest deadline:{" "}
+            {new Date(detail.contestDeadline).toLocaleDateString()}
           </p>
           <p className="text-sm text-slate-600">
             Contests: {detail.contestCount}

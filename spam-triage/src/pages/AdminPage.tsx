@@ -6,15 +6,18 @@ import {
   getAdminExport,
   getAdminRemovalRequests,
   getAdminSummary,
+  loginAdmin,
   resolveAdminRemovalRequest,
 } from "../api/admin.ts";
 import { Button } from "../components/Button.tsx";
 import { Card, CardBody } from "../components/Card.tsx";
 import { Input } from "../components/Input.tsx";
 import { StatusBadge } from "../components/StatusBadge.tsx";
+import { TurnstileWidget } from "../components/TurnstileWidget.tsx";
 
 export default function AdminPage() {
   const [password, setPassword] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [requests, setRequests] = useState<AdminRemovalRequest[]>([]);
@@ -48,7 +51,22 @@ export default function AdminPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    await fetchData(password);
+    setLoading(true);
+    setError("");
+    try {
+      const res = await loginAdmin(password, turnstileToken);
+      setSummary(res.summary);
+      setRequests(Array.isArray(res.requests) ? res.requests : []);
+      setAuthenticated(true);
+    } catch (e) {
+      setError(String(e));
+      setSummary(null);
+      setRequests([]);
+      setAuthenticated(false);
+    } finally {
+      setTurnstileToken("");
+      setLoading(false);
+    }
   };
 
   const handleResolve = async (
@@ -141,6 +159,17 @@ export default function AdminPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter review password"
               />
+              <div className="space-y-2">
+                <TurnstileWidget
+                  onVerify={setTurnstileToken}
+                  onError={() => setTurnstileToken("")}
+                />
+                {!turnstileToken && error.startsWith("VALIDATION_ERROR") && (
+                  <p className="text-sm text-red-600">
+                    Please complete the Turnstile challenge.
+                  </p>
+                )}
+              </div>
               <Button type="submit" loading={loading}>
                 Unlock
               </Button>
@@ -250,24 +279,15 @@ export default function AdminPage() {
           </div>
           {exportError && <p className="text-red-600">{exportError}</p>}
           <div className="flex flex-wrap gap-2">
-            <Button
-              loading={exportLoading}
-              onClick={handleExport}
-            >
+            <Button loading={exportLoading} onClick={handleExport}>
               {exportData ? "Refresh" : "Load export data"}
             </Button>
             {exportData && (
               <>
-                <Button
-                  variant="secondary"
-                  onClick={handleCopyExport}
-                >
+                <Button variant="secondary" onClick={handleCopyExport}>
                   {copySuccess ? "Copied!" : "Copy JSON"}
                 </Button>
-                <Button
-                  variant="secondary"
-                  onClick={handleDownloadExport}
-                >
+                <Button variant="secondary" onClick={handleDownloadExport}>
                   Download .json
                 </Button>
                 <p className="self-center text-sm text-slate-500">

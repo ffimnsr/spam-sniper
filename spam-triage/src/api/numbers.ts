@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "./client.ts";
+import { apiPost } from "./client.ts";
 
 export interface CheckNumberResponse {
   ok: true;
@@ -12,11 +12,18 @@ export interface CheckNumberResponse {
   contestWindowOpen?: boolean;
 }
 
-export function checkNumber(number_: string, country?: string) {
-  const params = new URLSearchParams();
-  params.set("number", number_);
-  if (country) params.set("country", country);
-  return apiGet<CheckNumberResponse>(`/api/numbers/check?${params.toString()}`);
+export interface CheckNumberBody {
+  phoneNumber: string;
+  country?: string;
+  turnstileToken: string;
+}
+
+export function checkNumber(body: CheckNumberBody) {
+  return apiPost<CheckNumberResponse>("/api/numbers/check", {
+    number: body.phoneNumber,
+    country: body.country,
+    turnstileToken: body.turnstileToken,
+  });
 }
 
 export interface SubmitReportBody {

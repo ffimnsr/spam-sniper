@@ -8,10 +8,12 @@ import { Button } from "../components/Button.tsx";
 import { Card, CardBody } from "../components/Card.tsx";
 import { Input } from "../components/Input.tsx";
 import { StatusBadge } from "../components/StatusBadge.tsx";
+import { TurnstileWidget } from "../components/TurnstileWidget.tsx";
 
 const schema = z.object({
   phoneNumber: z.string().min(1, "Phone number is required"),
   country: z.string().optional(),
+  turnstileToken: z.string().min(1, "Please complete the Turnstile challenge"),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -20,10 +22,11 @@ export default function CheckPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { country: "PH" },
+    defaultValues: { country: "PH", turnstileToken: "" },
   });
 
   const [result, setResult] = useState<{
@@ -44,7 +47,11 @@ export default function CheckPage() {
     setError("");
     setResult(null);
     try {
-      const res = await checkNumber(data.phoneNumber, data.country);
+      const res = await checkNumber({
+        phoneNumber: data.phoneNumber,
+        country: data.country,
+        turnstileToken: data.turnstileToken,
+      });
       if (res.found) {
         setResult({
           found: true,
@@ -62,6 +69,7 @@ export default function CheckPage() {
     } catch (e) {
       setError(String(e));
     } finally {
+      setValue("turnstileToken", "");
       setLoading(false);
     }
   };
@@ -92,6 +100,17 @@ export default function CheckPage() {
               error={errors.country?.message}
               placeholder="PH"
             />
+            <div className="space-y-2">
+              <TurnstileWidget
+                onVerify={(token) => setValue("turnstileToken", token)}
+                onError={() => setValue("turnstileToken", "")}
+              />
+              {errors.turnstileToken && (
+                <p className="text-sm text-red-600">
+                  {errors.turnstileToken.message}
+                </p>
+              )}
+            </div>
             <Button type="submit" loading={loading}>
               Check
             </Button>

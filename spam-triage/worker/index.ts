@@ -1,16 +1,18 @@
+import {
+  getAdminExportApiPath,
+  getAdminLoginApiPath,
+  getAdminRemovalRequestsApiPath,
+  getAdminSummaryApiPath,
+} from "../shared/admin-paths.ts";
 import { finalizeRemovalRequests } from "./jobs/finalize-removals.ts";
 import { json, jsonError } from "./lib/http.ts";
 import {
   handleAdminExport,
+  handleAdminLogin,
   handleAdminRemovalRequests,
   handleAdminResolve,
   handleAdminSummary,
 } from "./routes/admin.ts";
-import {
-  getAdminExportApiPath,
-  getAdminRemovalRequestsApiPath,
-  getAdminSummaryApiPath,
-} from "../shared/admin-paths.ts";
 import { handleCheckNumber } from "./routes/numbers.ts";
 import {
   handleContestRemovalRequest,
@@ -28,6 +30,7 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
     const adminRoute = env.HIDDEN_ADMIN_PATH;
+    const adminLoginApiPath = getAdminLoginApiPath(adminRoute);
     const adminSummaryApiPath = getAdminSummaryApiPath(adminRoute);
     const adminRemovalRequestsApiPath =
       getAdminRemovalRequestsApiPath(adminRoute);
@@ -49,6 +52,10 @@ export default {
 
         if (url.pathname === "/api/numbers/check") {
           return handleCheckNumber(request, env);
+        }
+
+        if (url.pathname === adminLoginApiPath) {
+          return handleAdminLogin(request, env);
         }
 
         if (url.pathname === "/api/removal-requests") {

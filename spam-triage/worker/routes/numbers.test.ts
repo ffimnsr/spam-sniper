@@ -62,6 +62,13 @@ class MockDb {
 describe("handleCheckNumber", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      } satisfies Partial<Response>),
+    );
   });
 
   it("returns found: false for unreported number", async () => {
@@ -74,9 +81,15 @@ describe("handleCheckNumber", () => {
       HIDDEN_ADMIN_PATH: "/hidden-review-path",
     };
 
-    const request = new Request(
-      "https://example.com/api/numbers/check?number=%2B639171234567&country=PH",
-    );
+    const request = new Request("https://example.com/api/numbers/check", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        number: "+639171234567",
+        country: "PH",
+        turnstileToken: "token",
+      }),
+    });
 
     const response = await handleCheckNumber(request, env);
     const body = (await response.json()) as Record<string, unknown>;
@@ -105,9 +118,15 @@ describe("handleCheckNumber", () => {
       HIDDEN_ADMIN_PATH: "/hidden-review-path",
     };
 
-    const request = new Request(
-      "https://example.com/api/numbers/check?number=%2B639171234567&country=PH",
-    );
+    const request = new Request("https://example.com/api/numbers/check", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        number: "+639171234567",
+        country: "PH",
+        turnstileToken: "token",
+      }),
+    });
 
     const response = await handleCheckNumber(request, env);
     const body = (await response.json()) as Record<string, unknown>;
@@ -141,9 +160,15 @@ describe("handleCheckNumber", () => {
       HIDDEN_ADMIN_PATH: "/hidden-review-path",
     };
 
-    const request = new Request(
-      "https://example.com/api/numbers/check?number=%2B639171234567&country=PH",
-    );
+    const request = new Request("https://example.com/api/numbers/check", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        number: "+639171234567",
+        country: "PH",
+        turnstileToken: "token",
+      }),
+    });
 
     const response = await handleCheckNumber(request, env);
     const body = (await response.json()) as Record<string, unknown>;
@@ -163,7 +188,11 @@ describe("handleCheckNumber", () => {
       HIDDEN_ADMIN_PATH: "/hidden-review-path",
     };
 
-    const request = new Request("https://example.com/api/numbers/check");
+    const request = new Request("https://example.com/api/numbers/check", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ turnstileToken: "token" }),
+    });
 
     const response = await handleCheckNumber(request, env);
     expect(response.status).toBe(400);
@@ -181,13 +210,58 @@ describe("handleCheckNumber", () => {
       HIDDEN_ADMIN_PATH: "/hidden-review-path",
     };
 
-    const request = new Request(
-      "https://example.com/api/numbers/check?number=123&country=PH",
-    );
+    const request = new Request("https://example.com/api/numbers/check", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        number: "123",
+        country: "PH",
+        turnstileToken: "token",
+      }),
+    });
 
     const response = await handleCheckNumber(request, env);
     expect(response.status).toBe(400);
     const body = (await response.json()) as Record<string, unknown>;
     expect(body.ok).toBe(false);
+  });
+
+  it("rejects Turnstile verification failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: false }),
+      } satisfies Partial<Response>),
+    );
+
+    const env = {
+      DB: new MockDb({ numberRow: null }) as unknown as D1Database,
+      ASSETS: { fetch: vi.fn() } as unknown as Fetcher,
+      HASH_SECRET: "test-secret",
+      TURNSTILE_SECRET_KEY: "test-turnstile",
+      ADMIN_PASSWORD: "admin",
+      HIDDEN_ADMIN_PATH: "/hidden-review-path",
+    };
+
+    const request = new Request("https://example.com/api/numbers/check", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        number: "+639171234567",
+        country: "PH",
+        turnstileToken: "bad-token",
+      }),
+    });
+
+    const response = await handleCheckNumber(request, env);
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(400);
+    expect(body.ok).toBe(false);
+    expect(body.error).toEqual({
+      code: "TURNSTILE_FAILED",
+      message: "Turnstile verification failed",
+    });
   });
 });

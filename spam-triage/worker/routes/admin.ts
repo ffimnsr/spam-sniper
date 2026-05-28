@@ -1,9 +1,11 @@
+import { getAdminRemovalRequestsApiPath } from "../../shared/admin-paths.ts";
 import { json, jsonError } from "../lib/http.ts";
 import { readJsonObject } from "../lib/request.ts";
-import { AdminResolveBodySchema } from "../lib/validation.ts";
+import { verifyTurnstile } from "../lib/turnstile.ts";
 import {
-  getAdminRemovalRequestsApiPath,
-} from "../../shared/admin-paths.ts";
+  AdminLoginBodySchema,
+  AdminResolveBodySchema,
+} from "../lib/validation.ts";
 import type { Env } from "../types.ts";
 
 function requireAdmin(request: Request, env: Env): Response | null {
@@ -15,32 +17,7 @@ function requireAdmin(request: Request, env: Env): Response | null {
   return null;
 }
 
-// Map DB category labels to community-core style labels
-function mapCategory(cat: string): string {
-  const map: Record<string, string> = {
-    scam: "scam",
-    phishing: "phishing",
-    loan_spam: "loan spam",
-    robocall: "robocall",
-    impersonation: "impersonation",
-    delivery_scam: "delivery scam",
-    bank_scam: "bank scam",
-    unknown: "unknown",
-  };
-  return map[cat] ?? cat;
-}
-
-export async function handleAdminSummary(
-  request: Request,
-  env: Env,
-): Promise<Response> {
-  if (request.method !== "GET") {
-    return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
-  }
-
-  const denied = requireAdmin(request, env);
-  if (denied) return denied;
-
+async function getAdminSummaryData(env: Env) {
   const db = env.DB;
 
   const total = await db
@@ -79,8 +56,8 @@ export async function handleAdminSummary(
     .bind("contested")
     .first<{ count: number }>();
 
-  return json({
-    ok: true,
+  return {
+    ok: true as const,
     totalNumbers: total?.count ?? 0,
     pending: pending?.count ?? 0,
     suspected: suspected?.count ?? 0,
@@ -90,20 +67,10 @@ export async function handleAdminSummary(
     removed: removed?.count ?? 0,
     openRemovalRequests: openRR?.count ?? 0,
     contestedRemovalRequests: contestedRR?.count ?? 0,
-  });
+  };
 }
 
-export async function handleAdminRemovalRequests(
-  request: Request,
-  env: Env,
-): Promise<Response> {
-  if (request.method !== "GET") {
-    return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
-  }
-
-  const denied = requireAdmin(request, env);
-  if (denied) return denied;
-
+async function getAdminRemovalRequestsData(env: Env) {
   const rows = await env.DB.prepare(
     `SELECT rr.id, rr.status, rr.reason, rr.contest_deadline, rr.created_at, n.display_mask,
 				(SELECT COUNT(*) FROM removal_contests rc WHERE rc.removal_request_id = rr.id) as contest_count
@@ -122,7 +89,92 @@ export async function handleAdminRemovalRequests(
     contest_count: number;
   }>();
 
-  return json({ ok: true, requests: rows.results ?? [] });
+  return rows.results ?? [];
+}
+
+export async function handleAdminLogin(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
+  }
+
+  const bodyResult = await readJsonObject(request);
+  if (!bodyResult.ok) {
+    return bodyResult.response;
+  }
+
+  const parsed = AdminLoginBodySchema.safeParse(bodyResult.value);
+  if (!parsed.success) {
+    return jsonError("Invalid request body", 400, "VALIDATION_ERROR");
+  }
+
+  if (parsed.data.password !== env.ADMIN_PASSWORD) {
+    return jsonError("Unauthorized", 401, "UNAUTHORIZED");
+  }
+
+  const turnstileOk = await verifyTurnstile(
+    env.TURNSTILE_SECRET_KEY,
+    parsed.data.turnstileToken,
+  );
+  if (!turnstileOk) {
+    return jsonError("Turnstile verification failed", 400, "TURNSTILE_FAILED");
+  }
+
+  const [summary, requests] = await Promise.all([
+    getAdminSummaryData(env),
+    getAdminRemovalRequestsData(env),
+  ]);
+
+  return json({
+    ok: true,
+    summary,
+    requests,
+  });
+}
+
+// Map DB category labels to community-core style labels
+function mapCategory(cat: string): string {
+  const map: Record<string, string> = {
+    scam: "scam",
+    phishing: "phishing",
+    loan_spam: "loan spam",
+    robocall: "robocall",
+    impersonation: "impersonation",
+    delivery_scam: "delivery scam",
+    bank_scam: "bank scam",
+    unknown: "unknown",
+  };
+  return map[cat] ?? cat;
+}
+
+export async function handleAdminSummary(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
+  }
+
+  const denied = requireAdmin(request, env);
+  if (denied) return denied;
+
+  return json(await getAdminSummaryData(env));
+}
+
+export async function handleAdminRemovalRequests(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
+  }
+
+  const denied = requireAdmin(request, env);
+  if (denied) return denied;
+
+  return json({ ok: true, requests: await getAdminRemovalRequestsData(env) });
 }
 
 export async function handleAdminResolve(

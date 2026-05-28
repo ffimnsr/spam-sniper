@@ -27,6 +27,10 @@ export function getAdminSummaryApiPath(path: string) {
   return `${getHiddenAdminApiBase(path)}/summary`;
 }
 
+export function getAdminLoginApiPath(path: string) {
+  return `${getHiddenAdminApiBase(path)}/login`;
+}
+
 export function getAdminRemovalRequestsApiPath(path: string) {
   return `${getHiddenAdminApiBase(path)}/removal-requests`;
 }
