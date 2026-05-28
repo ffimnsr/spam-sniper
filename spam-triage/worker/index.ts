@@ -1,11 +1,13 @@
 import { finalizeRemovalRequests } from "./jobs/finalize-removals.ts";
 import { json, jsonError } from "./lib/http.ts";
 import {
+  handleAdminExport,
   handleAdminRemovalRequests,
   handleAdminResolve,
   handleAdminSummary,
 } from "./routes/admin.ts";
 import {
+  getAdminExportApiPath,
   getAdminRemovalRequestsApiPath,
   getAdminSummaryApiPath,
 } from "../shared/admin-paths.ts";
@@ -29,6 +31,7 @@ export default {
     const adminSummaryApiPath = getAdminSummaryApiPath(adminRoute);
     const adminRemovalRequestsApiPath =
       getAdminRemovalRequestsApiPath(adminRoute);
+    const adminExportApiPath = getAdminExportApiPath(adminRoute);
 
     if (url.pathname.startsWith("/api/")) {
       try {
@@ -66,6 +69,10 @@ export default {
 
         if (url.pathname === adminRemovalRequestsApiPath) {
           return handleAdminRemovalRequests(request, env);
+        }
+
+        if (url.pathname === adminExportApiPath) {
+          return handleAdminExport(request, env);
         }
 
         if (

@@ -34,3 +34,7 @@ export function getAdminRemovalRequestsApiPath(path: string) {
 export function buildAdminResolveApiPath(path: string, id: number) {
   return `${getAdminRemovalRequestsApiPath(path)}/${id}/resolve`;
 }
+
+export function getAdminExportApiPath(path: string) {
+  return `${getHiddenAdminApiBase(path)}/export`;
+}

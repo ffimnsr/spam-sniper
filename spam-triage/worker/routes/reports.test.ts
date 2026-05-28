@@ -5,6 +5,7 @@ import { handleReport } from "./reports.ts";
 type NumberRow = {
   id: number;
   number_hash: string;
+  phone_number_e164: string | null;
   display_mask: string;
   country_code: string | null;
   status: string;
@@ -79,15 +80,16 @@ class MockStatement {
       this.state.numberRow = {
         id: 1,
         number_hash: String(this.params[0]),
-        display_mask: String(this.params[1]),
-        country_code: this.params[2] as string | null,
-        status: String(this.params[3]),
+        phone_number_e164: String(this.params[1]),
+        display_mask: String(this.params[2]),
+        country_code: this.params[3] as string | null,
+        status: String(this.params[4]),
         report_count: 0,
         unique_reporter_count: 0,
         removal_request_id: null,
-        first_reported_at: String(this.params[4]),
-        last_reported_at: String(this.params[5]),
-        updated_at: String(this.params[6]),
+        first_reported_at: String(this.params[5]),
+        last_reported_at: String(this.params[6]),
+        updated_at: String(this.params[7]),
       };
       this.runResult.meta.last_row_id = 1;
       return this.runResult;
@@ -209,6 +211,7 @@ describe("handleReport", () => {
     expect(body.duplicate).toBe(false);
     expect(body.maskedNumber).toBe("+63917 *** 4567");
     expect(body.status).toBe("pending");
+    expect(state.numberRow?.phone_number_e164).toBe("+639171234567");
   });
 
   it("rejects invalid phone numbers", async () => {

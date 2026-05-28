@@ -1,7 +1,9 @@
 import { useState } from "react";
 import {
+  type AdminExportEntry,
   type AdminRemovalRequest,
   type AdminSummary,
+  getAdminExport,
   getAdminRemovalRequests,
   getAdminSummary,
   resolveAdminRemovalRequest,
@@ -18,6 +20,10 @@ export default function AdminPage() {
   const [requests, setRequests] = useState<AdminRemovalRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [exportData, setExportData] = useState<AdminExportEntry[] | null>(null);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const fetchData = async (pwd: string) => {
     setLoading(true);
@@ -55,6 +61,64 @@ export default function AdminPage() {
     } catch (e) {
       setError(String(e));
     }
+  };
+
+  const handleExport = async () => {
+    setExportLoading(true);
+    setExportError("");
+    setCopySuccess(false);
+    try {
+      const res = await getAdminExport(password);
+      setExportData(res.entries);
+    } catch (e) {
+      setExportError(String(e));
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  const buildExportJson = () => {
+    if (!exportData) return "";
+    return JSON.stringify(
+      {
+        version: 1,
+        generated_at: new Date().toISOString(),
+        source: "SpamSniper Verified Spam Export",
+        notes: [
+          "Auto-generated export of all verified_spam entries from spam-triage.",
+          "phone_number_e164 values use stored E.164 numbers.",
+          "display_mask values are included for safe admin UI display.",
+        ],
+        total_entries: exportData.length,
+        entries: exportData,
+      },
+      null,
+      2,
+    );
+  };
+
+  const handleCopyExport = async () => {
+    const json = buildExportJson();
+    if (!json) return;
+    try {
+      await navigator.clipboard.writeText(json);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch {
+      setExportError("Failed to copy to clipboard");
+    }
+  };
+
+  const handleDownloadExport = () => {
+    const json = buildExportJson();
+    if (!json) return;
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `verified-spam-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   if (!authenticated) {
@@ -167,6 +231,75 @@ export default function AdminPage() {
           </Card>
         </div>
       )}
+
+      <Card className="max-w-5xl">
+        <CardBody className="space-y-4">
+          <div className="space-y-2">
+            <p className="page-eyebrow">Export</p>
+            <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+              Verified spam export.
+            </h2>
+            <p className="text-slate-600">
+              Export all verified spam entries as JSON, matching the
+              community-core blocklist format.
+            </p>
+            <p className="text-sm text-slate-500">
+              Preview below stays masked. Copied and downloaded JSON includes
+              full E.164 values.
+            </p>
+          </div>
+          {exportError && <p className="text-red-600">{exportError}</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              loading={exportLoading}
+              onClick={handleExport}
+            >
+              {exportData ? "Refresh" : "Load export data"}
+            </Button>
+            {exportData && (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={handleCopyExport}
+                >
+                  {copySuccess ? "Copied!" : "Copy JSON"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleDownloadExport}
+                >
+                  Download .json
+                </Button>
+                <p className="self-center text-sm text-slate-500">
+                  {exportData.length} entries
+                </p>
+              </>
+            )}
+          </div>
+          {exportData && (
+            <div className="max-h-96 space-y-2 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              {exportData.map((entry) => (
+                <div
+                  key={`${entry.phone_number_e164}-${entry.category}`}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2"
+                >
+                  <div>
+                    <p className="font-medium text-slate-950">
+                      {entry.display_mask}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {entry.category} · {entry.confidence} confidence
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {entry.unique_reporter_count} unique reporters
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
       <Card className="max-w-5xl">
         <CardBody className="space-y-4">

@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildAdminResolveApiPath,
+  getAdminExportApiPath,
   getAdminSummaryApiPath,
 } from "../../shared/admin-paths.ts";
 import type { Env } from "../types.ts";
-import { handleAdminResolve, handleAdminSummary } from "./admin.ts";
+import {
+  handleAdminExport,
+  handleAdminResolve,
+  handleAdminSummary,
+} from "./admin.ts";
 
 const hiddenAdminPath = "/intake/review/queue/manual/escalations/window/f4c9";
 
@@ -14,6 +19,16 @@ class MockStatement {
     removalRequest: { id: number; numberId: number; status: string };
     number: { id: number; status: string; removalRequestId: number | null };
     uniqueReporters: number;
+    exportRows: Array<{
+      id: number;
+      phone_number_e164: string | null;
+      display_mask: string;
+      country_code: string | null;
+      report_count: number;
+      unique_reporter_count: number;
+      first_reported_at: string;
+      last_reported_at: string;
+    }>;
   };
 
   constructor(
@@ -22,6 +37,16 @@ class MockStatement {
       removalRequest: { id: number; numberId: number; status: string };
       number: { id: number; status: string; removalRequestId: number | null };
       uniqueReporters: number;
+      exportRows: Array<{
+        id: number;
+        phone_number_e164: string | null;
+        display_mask: string;
+        country_code: string | null;
+        report_count: number;
+        unique_reporter_count: number;
+        first_reported_at: string;
+        last_reported_at: string;
+      }>;
     },
   ) {
     this.sql = sql;
@@ -49,6 +74,10 @@ class MockStatement {
       )
     ) {
       return { unique: this.state.uniqueReporters } as T;
+    }
+
+    if (this.sql.includes("SELECT category, COUNT(*) as cnt")) {
+      return { category: "bank_scam", cnt: 3 } as T;
     }
 
     if (this.sql.includes("FROM numbers WHERE status = ?")) {
@@ -105,6 +134,10 @@ class MockStatement {
   }
 
   async all<T>(): Promise<{ results: T[] }> {
+    if (this.sql.includes("WHERE n.status = 'verified_spam'")) {
+      return { results: this.state.exportRows as T[] };
+    }
+
     return { results: [] as T[] };
   }
 }
@@ -114,12 +147,32 @@ class MockDb {
     removalRequest: { id: number; numberId: number; status: string };
     number: { id: number; status: string; removalRequestId: number | null };
     uniqueReporters: number;
+    exportRows: Array<{
+      id: number;
+      phone_number_e164: string | null;
+      display_mask: string;
+      country_code: string | null;
+      report_count: number;
+      unique_reporter_count: number;
+      first_reported_at: string;
+      last_reported_at: string;
+    }>;
   };
 
   constructor(state: {
     removalRequest: { id: number; numberId: number; status: string };
     number: { id: number; status: string; removalRequestId: number | null };
     uniqueReporters: number;
+    exportRows: Array<{
+      id: number;
+      phone_number_e164: string | null;
+      display_mask: string;
+      country_code: string | null;
+      report_count: number;
+      unique_reporter_count: number;
+      first_reported_at: string;
+      last_reported_at: string;
+    }>;
   }) {
     this.state = state;
   }
@@ -135,6 +188,16 @@ describe("handleAdminResolve", () => {
     removalRequest: { id: number; numberId: number; status: string };
     number: { id: number; status: string; removalRequestId: number | null };
     uniqueReporters: number;
+    exportRows: Array<{
+      id: number;
+      phone_number_e164: string | null;
+      display_mask: string;
+      country_code: string | null;
+      report_count: number;
+      unique_reporter_count: number;
+      first_reported_at: string;
+      last_reported_at: string;
+    }>;
   };
 
   beforeEach(() => {
@@ -143,6 +206,18 @@ describe("handleAdminResolve", () => {
       removalRequest: { id: 7, numberId: 11, status: "open" },
       number: { id: 11, status: "under_removal_review", removalRequestId: 7 },
       uniqueReporters: 3,
+      exportRows: [
+        {
+          id: 11,
+          phone_number_e164: "+15551234567",
+          display_mask: "+1555 *** 4567",
+          country_code: "US",
+          report_count: 4,
+          unique_reporter_count: 3,
+          first_reported_at: "2026-05-01T00:00:00.000Z",
+          last_reported_at: "2026-05-02T00:00:00.000Z",
+        },
+      ],
     };
 
     env = {
@@ -257,6 +332,16 @@ describe("handleAdminSummary", () => {
     removalRequest: { id: number; numberId: number; status: string };
     number: { id: number; status: string; removalRequestId: number | null };
     uniqueReporters: number;
+    exportRows: Array<{
+      id: number;
+      phone_number_e164: string | null;
+      display_mask: string;
+      country_code: string | null;
+      report_count: number;
+      unique_reporter_count: number;
+      first_reported_at: string;
+      last_reported_at: string;
+    }>;
   };
 
   beforeEach(() => {
@@ -265,6 +350,18 @@ describe("handleAdminSummary", () => {
       removalRequest: { id: 7, numberId: 11, status: "open" },
       number: { id: 11, status: "under_removal_review", removalRequestId: 7 },
       uniqueReporters: 3,
+      exportRows: [
+        {
+          id: 11,
+          phone_number_e164: "+15551234567",
+          display_mask: "+1555 *** 4567",
+          country_code: "US",
+          report_count: 4,
+          unique_reporter_count: 3,
+          first_reported_at: "2026-05-01T00:00:00.000Z",
+          last_reported_at: "2026-05-02T00:00:00.000Z",
+        },
+      ],
     };
 
     env = {
@@ -306,5 +403,27 @@ describe("handleAdminSummary", () => {
     );
     const response = await handleAdminSummary(request, env);
     expect(response.status).toBe(401);
+  });
+
+  it("exports full phone number plus masked display", async () => {
+    const request = new Request(
+      `https://example.com${getAdminExportApiPath(hiddenAdminPath)}`,
+      {
+        headers: { Authorization: "Bearer admin" },
+      },
+    );
+
+    const response = await handleAdminExport(request, env);
+    const body = (await response.json()) as {
+      ok: boolean;
+      entries: Array<Record<string, unknown>>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.entries).toHaveLength(1);
+    expect(body.entries[0]?.phone_number_e164).toBe("+15551234567");
+    expect(body.entries[0]?.display_mask).toBe("+1555 *** 4567");
+    expect(body.entries[0]?.category).toBe("bank scam");
   });
 });

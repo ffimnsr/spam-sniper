@@ -61,6 +61,7 @@ export async function handleReport(
     .bind(numberHash)
     .first<{
       id: number;
+      phone_number_e164: string | null;
       status: string;
       report_count: number;
       unique_reporter_count: number;
@@ -70,10 +71,11 @@ export async function handleReport(
   if (!numberRow) {
     const insert = await db
       .prepare(
-        "INSERT INTO numbers (number_hash, display_mask, country_code, status, first_reported_at, last_reported_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO numbers (number_hash, phone_number_e164, display_mask, country_code, status, first_reported_at, last_reported_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .bind(
         numberHash,
+        normalized.e164,
         normalized.displayMask,
         normalized.countryCode ?? null,
         "pending",
@@ -85,11 +87,27 @@ export async function handleReport(
     const id = insert.meta?.last_row_id ?? 0;
     numberRow = {
       id,
+      phone_number_e164: normalized.e164,
       status: "pending",
       report_count: 0,
       unique_reporter_count: 0,
       removal_request_id: null,
     };
+  } else if (!numberRow.phone_number_e164) {
+    await db
+      .prepare(
+        "UPDATE numbers SET phone_number_e164 = ?, display_mask = ?, country_code = ?, updated_at = ? WHERE id = ?",
+      )
+      .bind(
+        normalized.e164,
+        normalized.displayMask,
+        normalized.countryCode ?? null,
+        now,
+        numberRow.id,
+      )
+      .run();
+
+    numberRow.phone_number_e164 = normalized.e164;
   }
 
   // Insert report with duplicate guard

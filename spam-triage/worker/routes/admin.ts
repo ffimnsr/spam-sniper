@@ -1,7 +1,9 @@
 import { json, jsonError } from "../lib/http.ts";
 import { readJsonObject } from "../lib/request.ts";
 import { AdminResolveBodySchema } from "../lib/validation.ts";
-import { getAdminRemovalRequestsApiPath } from "../../shared/admin-paths.ts";
+import {
+  getAdminRemovalRequestsApiPath,
+} from "../../shared/admin-paths.ts";
 import type { Env } from "../types.ts";
 
 function requireAdmin(request: Request, env: Env): Response | null {
@@ -11,6 +13,21 @@ function requireAdmin(request: Request, env: Env): Response | null {
     return jsonError("Unauthorized", 401, "UNAUTHORIZED");
   }
   return null;
+}
+
+// Map DB category labels to community-core style labels
+function mapCategory(cat: string): string {
+  const map: Record<string, string> = {
+    scam: "scam",
+    phishing: "phishing",
+    loan_spam: "loan spam",
+    robocall: "robocall",
+    impersonation: "impersonation",
+    delivery_scam: "delivery scam",
+    bank_scam: "bank scam",
+    unknown: "unknown",
+  };
+  return map[cat] ?? cat;
 }
 
 export async function handleAdminSummary(
@@ -204,4 +221,79 @@ export async function handleAdminResolve(
   }
 
   return json({ ok: true, action });
+}
+
+export async function handleAdminExport(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  if (request.method !== "GET") {
+    return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
+  }
+
+  const denied = requireAdmin(request, env);
+  if (denied) return denied;
+
+  // Query all verified_spam numbers
+  const numbers = await env.DB.prepare(
+    `SELECT n.id, n.phone_number_e164, n.display_mask, n.country_code, n.report_count, n.unique_reporter_count,
+            n.first_reported_at, n.last_reported_at
+     FROM numbers n
+     WHERE n.status = 'verified_spam'
+     ORDER BY n.unique_reporter_count DESC, n.last_reported_at DESC`,
+  ).all<{
+    id: number;
+    phone_number_e164: string | null;
+    display_mask: string;
+    country_code: string | null;
+    report_count: number;
+    unique_reporter_count: number;
+    first_reported_at: string;
+    last_reported_at: string;
+  }>();
+
+  const rows = numbers.results ?? [];
+
+  // For each number, get the most common report category
+  const entries = [];
+  for (const row of rows) {
+    const catRes = await env.DB.prepare(
+      `SELECT category, COUNT(*) as cnt
+       FROM reports
+       WHERE number_id = ?
+       GROUP BY category
+       ORDER BY cnt DESC
+       LIMIT 1`,
+    )
+      .bind(row.id)
+      .first<{ category: string; cnt: number }>();
+
+    entries.push({
+      phone_number_e164: row.phone_number_e164 ?? row.display_mask,
+      display_mask: row.display_mask,
+      category: catRes ? mapCategory(catRes.category) : "unknown",
+      confidence: row.unique_reporter_count >= 5 ? "high" : "medium",
+      report_count: row.report_count,
+      unique_reporter_count: row.unique_reporter_count,
+      country_code: row.country_code ?? undefined,
+      first_reported_at: row.first_reported_at,
+      last_reported_at: row.last_reported_at,
+    });
+  }
+
+  const exportData = {
+    ok: true,
+    version: 1,
+    generated_at: new Date().toISOString(),
+    source: "SpamSniper Verified Spam Export",
+    notes: [
+      "Auto-generated export of all verified_spam entries from spam-triage.",
+      "phone_number_e164 values use stored E.164 numbers.",
+      "display_mask values are included for safe admin UI display.",
+    ],
+    total_entries: entries.length,
+    entries,
+  };
+
+  return json(exportData);
 }

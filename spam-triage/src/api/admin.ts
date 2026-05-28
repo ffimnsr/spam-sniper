@@ -1,5 +1,6 @@
 import {
   buildAdminResolveApiPath,
+  getAdminExportApiPath,
   getAdminRemovalRequestsApiPath,
   getAdminSummaryApiPath,
 } from "../../shared/admin-paths.ts";
@@ -40,6 +41,28 @@ export interface AdminResolveBody {
 export interface AdminResolveResponse {
   ok: true;
   action: string;
+}
+
+export interface AdminExportEntry {
+  phone_number_e164: string;
+  display_mask: string;
+  category: string;
+  confidence: string;
+  report_count: number;
+  unique_reporter_count: number;
+  country_code?: string;
+  first_reported_at: string;
+  last_reported_at: string;
+}
+
+export interface AdminExportResponse {
+  ok: true;
+  version: number;
+  generated_at: string;
+  source: string;
+  notes: string[];
+  total_entries: number;
+  entries: AdminExportEntry[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -130,6 +153,13 @@ export function resolveAdminRemovalRequest(
   return apiPostWithAuth<AdminResolveResponse>(
     buildAdminResolveApiPath(hiddenAdminRoute, id),
     body,
+    password,
+  );
+}
+
+export function getAdminExport(password: string) {
+  return apiGetWithAuth<AdminExportResponse>(
+    getAdminExportApiPath(hiddenAdminRoute),
     password,
   );
 }
