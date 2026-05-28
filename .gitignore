@@ -3,3 +3,12 @@
 blocklist/.DS_Store
 blocklist/.gnupg/
 .venv/
+.tmp-docs-venv/
+
+*.md
+!ISSUES.md
+!CONTRIBUTING.md
+!CODE_OF_CONDUCT.md
+!SUPPORT.md
+!CHANGELOG.md
+!README.md
