@@ -11,6 +11,7 @@ struct BlocklistSearchView: View {
     @State private var isAddEntryPresented = false
     @State private var editingEntry: PersonalBlocklistEntry?
     @State private var deletingEntry: PersonalBlocklistEntry?
+    @State private var selectedExplanationResult: BlockedNumberSearchResult?
     @State private var isImportingPersonalList = false
     @State private var importPreview: PersonalBlocklistImportPreview?
     @State private var importResult: PersonalBlocklistImportResult?
@@ -108,6 +109,17 @@ struct BlocklistSearchView: View {
         }
         .sheet(item: $editingEntry) { entry in
             AddPersonalBlocklistEntryView(model: model, editingEntry: entry)
+        }
+        .sheet(item: $selectedExplanationResult) { result in
+            NumberExplanationView(
+                model: model,
+                result: result,
+                onEditPersonal: {
+                    if let entry = result.personalEntry {
+                        editingEntry = entry
+                    }
+                }
+            )
         }
         .task {
             if model.numberSearchMessage == nil {
@@ -276,7 +288,7 @@ struct BlocklistSearchView: View {
                         .font(.headline.weight(.bold))
                     
                     if showsSearchSubtitle {
-                        Text("Check the final blocking feed built from synced repositories and your personal list.")
+                        Text("Check the final protection feed built from synced repositories and your personal list.")
                             .font(.footnote)
                             .foregroundStyle(palette.secondaryText)
                             .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
@@ -428,7 +440,7 @@ struct BlocklistSearchView: View {
         if model.isSearchingNumbers && model.numberSearchResults.isEmpty {
             SearchStateCard(
                 title: "Searching…",
-                subtitle: "Scanning the final on-device blocking feed used by the app and extension.",
+                subtitle: "Scanning the final on-device protection feed used by the app and extension.",
                 systemImage: "magnifyingglass.circle.fill",
                 tint: palette.tint,
                 showsProgress: true
@@ -522,6 +534,9 @@ struct BlocklistSearchView: View {
                     if allowsEditing {
                         NumberSearchResultRow(
                             result: result,
+                            onShowDetails: {
+                                selectedExplanationResult = result
+                            },
                             onEditPersonal: {
                                 if let entry = result.personalEntry {
                                     editingEntry = entry
@@ -534,7 +549,14 @@ struct BlocklistSearchView: View {
                             }
                         )
                     } else {
-                        NumberSearchResultRow(result: result, onEditPersonal: nil, onDeletePersonal: nil)
+                        NumberSearchResultRow(
+                            result: result,
+                            onShowDetails: {
+                                selectedExplanationResult = result
+                            },
+                            onEditPersonal: nil,
+                            onDeletePersonal: nil
+                        )
                     }
                 }
             }
@@ -549,7 +571,7 @@ struct BlocklistSearchView: View {
     
     private var emptyResultsDescription: String {
         if trimmedQuery.isEmpty {
-            return "Enter digits or paste a formatted number to search the final blocking feed, including synced blocklists and personal entries."
+            return "Enter digits or paste a formatted number to search the final protection feed, including synced blocklists and personal entries."
         }
         return model.numberSearchMessage ?? "Try a different number or refresh your blocklists first."
     }
@@ -757,6 +779,7 @@ private struct SearchStateCard: View {
 
 private struct NumberSearchResultRow: View {
     let result: BlockedNumberSearchResult
+    let onShowDetails: () -> Void
     var onEditPersonal: (() -> Void)?
     var onDeletePersonal: (() -> Void)?
     
@@ -769,14 +792,14 @@ private struct NumberSearchResultRow: View {
             if showsSourceIcon {
                 sourceIcon
             }
-            
+
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(result.record.phoneNumberE164)
                             .font(.headline.weight(.bold))
                             .textSelection(.enabled)
-                        
+
                         if !trimmedDisplayName.isEmpty {
                             Text(trimmedDisplayName)
                                 .font(.subheadline)
@@ -785,33 +808,35 @@ private struct NumberSearchResultRow: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    
+
                     Spacer(minLength: 8)
                     MatchChip(label: result.matchKind.rawValue.capitalized, tint: matchColor)
                     if showsPersonalActions {
                         personalActionsMenu
                     }
                 }
-                
+
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {
                         InfoChip(label: result.record.category, tint: sourceColor)
                         NeutralInfoChip(label: result.record.confidence.capitalized)
+                        ActionChip(action: result.effectiveAction)
                         if result.source == .combined {
                             InfoChip(label: "Personal + Repo", tint: sourceColor)
                         }
                         Spacer(minLength: 0)
                     }
-                    
+
                     VStack(alignment: .leading, spacing: 8) {
                         InfoChip(label: result.record.category, tint: sourceColor)
                         NeutralInfoChip(label: result.record.confidence.capitalized)
+                        ActionChip(action: result.effectiveAction)
                         if result.source == .combined {
                             InfoChip(label: "Personal + Repo", tint: sourceColor)
                         }
                     }
                 }
-                
+
                 if let detailSummary {
                     Text(detailSummary)
                         .font(.subheadline)
@@ -819,7 +844,6 @@ private struct NumberSearchResultRow: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                
             }
         }
         .padding(14)
@@ -831,6 +855,8 @@ private struct NumberSearchResultRow: View {
         }
         .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.16 : 0.05), radius: 14, x: 0, y: 8)
         .accessibilityElement(children: showsPersonalActions ? .contain : .combine)
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .onTapGesture(perform: onShowDetails)
     }
     
     private var sourceIcon: some View {
@@ -973,6 +999,124 @@ private struct NeutralInfoChip: View {
             .padding(.vertical, 6)
             .background(.regularMaterial, in: Capsule())
             .fixedSize()
+    }
+}
+
+private struct ActionChip: View {
+    let action: EffectiveNumberAction
+
+    var body: some View {
+        Text(action.title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(action == .block ? .red : .orange)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background((action == .block ? Color.red : Color.orange).opacity(0.12), in: Capsule())
+            .fixedSize()
+    }
+}
+
+private struct NumberExplanationView: View {
+    @Bindable var model: SpamBlockerModel
+    let result: BlockedNumberSearchResult
+    let onEditPersonal: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Why This Number Is Here") {
+                    LabeledContent("Phone number", value: result.record.phoneNumberE164)
+                    LabeledContent("Source", value: sourceLabel)
+                    LabeledContent("Action", value: result.effectiveAction.title)
+                    if !result.record.displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        LabeledContent("Label", value: result.record.displayName)
+                    }
+                }
+
+                if !result.record.sourceBlocklistTitles.isEmpty {
+                    Section("Contributing Blocklists") {
+                        ForEach(result.record.sourceBlocklistTitles, id: \.self) { title in
+                            Text(title)
+                        }
+                    }
+                }
+
+                Section(metadataSectionTitle) {
+                    LabeledContent("Category", value: result.record.category)
+                    LabeledContent("Confidence", value: result.record.confidence.capitalized)
+                    if !result.record.aliases.isEmpty {
+                        LabeledContent("Aliases", value: result.record.aliases.joined(separator: ", "))
+                    }
+                    if !result.record.tags.isEmpty {
+                        LabeledContent("Tags", value: result.record.tags.joined(separator: ", "))
+                    }
+                    if let repositoryNotes {
+                        LabeledContent("Notes", value: repositoryNotes)
+                    }
+                }
+
+                if let personalEntry = result.personalEntry {
+                    Section("Personal Entry") {
+                        if !personalEntry.displayName.isEmpty {
+                            LabeledContent("Display name", value: personalEntry.displayName)
+                        }
+                        if !personalEntry.tags.isEmpty {
+                            LabeledContent("Tags", value: personalEntry.tags.joined(separator: ", "))
+                        }
+                        if !personalEntry.notes.isEmpty {
+                            LabeledContent("Notes", value: personalEntry.notes)
+                        }
+
+                        Button("Edit Personal Entry") {
+                            dismiss()
+                            onEditPersonal()
+                        }
+                    }
+                }
+
+                Section("Repository Context") {
+                    LabeledContent("Repository", value: repositoryContextName)
+                    LabeledContent("Resolved source", value: repositoryContextSource)
+                }
+            }
+            .navigationTitle("Number Details")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var sourceLabel: String {
+        switch result.source {
+        case .repo:
+            return "Synced repository"
+        case .personal:
+            return "Personal list"
+        case .combined:
+            return "Personal + repository"
+        }
+    }
+
+    private func fallback(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Unknown" : value
+    }
+
+    private var metadataSectionTitle: String {
+        result.source == .personal ? "Entry Metadata" : "Repository Metadata"
+    }
+
+    private var repositoryNotes: String? {
+        guard result.source == .repo else { return nil }
+
+        let trimmedNotes = result.record.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedNotes.isEmpty ? nil : result.record.notes
+    }
+
+    private var repositoryContextName: String {
+        result.source == .personal ? "N/A" : fallback(model.syncDiagnostics.repositoryDisplayName)
+    }
+
+    private var repositoryContextSource: String {
+        result.source == .personal ? "N/A" : fallback(model.syncDiagnostics.repositorySourceLabel)
     }
 }
 

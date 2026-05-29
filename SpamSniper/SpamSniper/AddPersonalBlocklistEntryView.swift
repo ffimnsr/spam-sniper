@@ -112,8 +112,13 @@ struct AddPersonalBlocklistEntryView: View {
     }
 
     private func save() {
-        let digits = phoneInput.filter(\.isNumber)
-        guard !digits.isEmpty, let number = Int64(digits), number > 0 else {
+        let number: Int64
+        do {
+            number = try PhoneNumberNormalizer.normalizedE164Digits(from: phoneInput)
+        } catch let error as PhoneNumberNormalizationError {
+            errorMessage = error.localizedDescription
+            return
+        } catch {
             errorMessage = "Enter a valid phone number."
             return
         }

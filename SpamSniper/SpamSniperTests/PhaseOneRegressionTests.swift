@@ -24,6 +24,22 @@ final class PhaseOneRegressionTests: XCTestCase {
     func testCustomRepositorySelectionTogglingPreservesResolvedURLsForSignatureChecks() throws {
         try assertSelectionConsistency(usingActiveRepositoryURL: URL(string: "https://example.com/custom/repo.json"))
     }
+
+    func testSyncDiagnosticsHealthReportsNeverSyncedWhenNoTimestampExists() {
+        XCTAssertEqual(SyncDiagnosticsSnapshot().health(relativeTo: Date(timeIntervalSince1970: 100)), .neverSynced)
+    }
+
+    func testSyncDiagnosticsHealthReportsHealthyWithinThreeDays() {
+        let referenceDate = Date(timeIntervalSince1970: 60 * 60 * 24 * 2)
+        let snapshot = SyncDiagnosticsSnapshot(lastSuccessfulSyncAt: Date(timeIntervalSince1970: 0))
+        XCTAssertEqual(snapshot.health(relativeTo: referenceDate), .healthy)
+    }
+
+    func testSyncDiagnosticsHealthReportsStaleAfterThreeDays() {
+        let referenceDate = Date(timeIntervalSince1970: 60 * 60 * 24 * 4)
+        let snapshot = SyncDiagnosticsSnapshot(lastSuccessfulSyncAt: Date(timeIntervalSince1970: 0))
+        XCTAssertEqual(snapshot.health(relativeTo: referenceDate), .stale)
+    }
 }
 
 private extension PhaseOneRegressionTests {

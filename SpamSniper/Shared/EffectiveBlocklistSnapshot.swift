@@ -4,23 +4,60 @@ struct EffectiveBlockedNumber: Identifiable, Equatable {
     let record: BlockedNumberRecord
     let personalEntry: PersonalBlocklistEntry?
     let source: BlockedNumberSearchResult.ResultSource
+    let action: EffectiveNumberAction
 
     var id: Int64 { record.id }
     var phoneNumber: Int64 { record.phoneNumber }
+    var identificationLabel: String {
+        let trimmedDisplayName = record.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedDisplayName.isEmpty, trimmedDisplayName != record.phoneNumberE164 {
+            return trimmedDisplayName
+        }
+
+        if let personalEntry {
+            let trimmedPersonalName = personalEntry.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedPersonalName.isEmpty {
+                return trimmedPersonalName
+            }
+        }
+
+        return record.category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "SpamSniper" : record.category
+    }
 }
 
 struct EffectiveBlocklistSnapshot {
     let entries: [EffectiveBlockedNumber]
     let blocklistIDs: [String]
+    let blocklistTitles: [String]
     let repositorySource: String
     let syncedAt: Date?
+
+    init(
+        entries: [EffectiveBlockedNumber],
+        blocklistIDs: [String],
+        blocklistTitles: [String] = [],
+        repositorySource: String,
+        syncedAt: Date?
+    ) {
+        self.entries = entries
+        self.blocklistIDs = blocklistIDs
+        self.blocklistTitles = blocklistTitles
+        self.repositorySource = repositorySource
+        self.syncedAt = syncedAt
+    }
 
     var records: [BlockedNumberRecord] {
         entries.map(\.record)
     }
 
     var blockedNumbers: [Int64] {
-        entries.map(\.phoneNumber)
+        entries.filter { $0.action == .block }.map(\.phoneNumber)
+    }
+
+    var identificationEntries: [(phoneNumber: Int64, label: String)] {
+        entries
+            .filter { $0.action == .identify }
+            .map { ($0.phoneNumber, $0.identificationLabel) }
     }
 
     var totalEntries: Int {
@@ -76,10 +113,12 @@ enum EffectiveBlocklistComposer {
 
         for repositoryRecord in repositorySnapshot.records.sorted(by: { $0.phoneNumber < $1.phoneNumber }) {
             let personalEntry = personalEntriesByNumber[repositoryRecord.phoneNumber]
+            let source: BlockedNumberSearchResult.ResultSource = personalEntry == nil ? .repo : .combined
             effectiveEntriesByNumber[repositoryRecord.phoneNumber] = EffectiveBlockedNumber(
                 record: mergedRepositoryRecord(repositoryRecord, personalEntry: personalEntry),
                 personalEntry: personalEntry,
-                source: personalEntry == nil ? .repo : .combined
+                source: source,
+                action: effectiveAction(for: source)
             )
         }
 
@@ -87,7 +126,8 @@ enum EffectiveBlocklistComposer {
             effectiveEntriesByNumber[personalEntry.phoneNumber] = EffectiveBlockedNumber(
                 record: personalOnlyRecord(for: personalEntry),
                 personalEntry: personalEntry,
-                source: .personal
+                source: .personal,
+                action: .block
             )
         }
 
@@ -96,6 +136,7 @@ enum EffectiveBlocklistComposer {
                 .values
                 .sorted { $0.phoneNumber < $1.phoneNumber },
             blocklistIDs: repositorySnapshot.blocklistIDs,
+            blocklistTitles: repositorySnapshot.blocklistTitles,
             repositorySource: repositorySnapshot.source,
             syncedAt: repositorySnapshot.syncedAt
         )
@@ -126,7 +167,8 @@ enum EffectiveBlocklistComposer {
                 matchedDigits: queryDigits,
                 matchKind: matchKind(for: entry.record, queryDigits: queryDigits),
                 source: entry.source,
-                personalEntry: entry.personalEntry
+                personalEntry: entry.personalEntry,
+                effectiveAction: entry.action
             )
         }
         let results = matchingResults
@@ -234,6 +276,15 @@ private extension EffectiveBlocklistComposer {
             return 1
         case .contains:
             return 2
+        }
+    }
+
+    static func effectiveAction(for source: BlockedNumberSearchResult.ResultSource) -> EffectiveNumberAction {
+        switch source {
+        case .repo:
+            return SpamBlockerShared.protectionMode == .labelOnly ? .identify : .block
+        case .personal, .combined:
+            return .block
         }
     }
 }

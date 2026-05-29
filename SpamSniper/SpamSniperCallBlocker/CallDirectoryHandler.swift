@@ -2,8 +2,6 @@
 //  CallDirectoryHandler.swift
 //  SpamSniperCallBlocker
 //
-//  Created by Codex on 3/19/26.
-//
 
 import CallKit
 import Foundation
@@ -21,10 +19,20 @@ final class CallDirectoryHandler: CXCallDirectoryProvider {
             return
         }
 
-        let numbers = (try? BlocklistSyncService.fetchEffectiveSnapshot().blockedNumbers) ?? SpamBlockerShared.blockedNumbers
+        let snapshot = try? BlocklistSyncService.fetchEffectiveSnapshot()
+        let blockingNumbers = snapshot?.blockedNumbers ?? SpamBlockerShared.blockedNumbers
 
-        for phoneNumber in numbers {
+        for phoneNumber in blockingNumbers {
             context.addBlockingEntry(withNextSequentialPhoneNumber: phoneNumber)
+        }
+
+        if let snapshot {
+            for identificationEntry in snapshot.identificationEntries {
+                context.addIdentificationEntry(
+                    withNextSequentialPhoneNumber: identificationEntry.phoneNumber,
+                    label: identificationEntry.label
+                )
+            }
         }
 
         context.completeRequest()

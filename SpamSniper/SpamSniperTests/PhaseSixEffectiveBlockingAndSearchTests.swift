@@ -4,6 +4,10 @@ import XCTest
 @MainActor
 final class PhaseSixEffectiveBlockingAndSearchTests: XCTestCase {
     func testComposeIncludesRepositoryOnlyNumberInEffectiveSnapshot() throws {
+        let originalMode = SpamBlockerShared.protectionMode
+        SpamBlockerShared.protectionMode = .block
+        defer { SpamBlockerShared.protectionMode = originalMode }
+
         let snapshot = try composeSnapshot(
             repositoryRecords: [
                 makeRepositoryRecord(phoneNumber: 1_555_000_1111, displayName: "Repo Only")
@@ -14,6 +18,7 @@ final class PhaseSixEffectiveBlockingAndSearchTests: XCTestCase {
         XCTAssertEqual(snapshot.blockedNumbers, [1_555_000_1111])
         XCTAssertEqual(snapshot.entries.first?.source, .repo)
         XCTAssertNil(snapshot.entries.first?.personalEntry)
+        XCTAssertEqual(snapshot.entries.first?.action, .block)
     }
     
     func testComposeIncludesPersonalOnlyNumberInEffectiveSnapshot() throws {
@@ -53,6 +58,49 @@ final class PhaseSixEffectiveBlockingAndSearchTests: XCTestCase {
         XCTAssertEqual(entry.record.notes, "Personal note")
         XCTAssertEqual(entry.record.tags, ["repo", "vip", "manual"])
     }
+
+    func testLabelOnlyModeConvertsRepoOnlyEntriesIntoIdentificationEntries() throws {
+        let originalMode = SpamBlockerShared.protectionMode
+        SpamBlockerShared.protectionMode = .labelOnly
+        defer { SpamBlockerShared.protectionMode = originalMode }
+
+        let snapshot = try composeSnapshot(
+            repositoryRecords: [
+                makeRepositoryRecord(
+                    phoneNumber: 1_555_000_4444,
+                    displayName: "Label Me",
+                    sourceBlocklistIDs: ["PH/core"],
+                    sourceBlocklistTitles: ["Community Core"]
+                )
+            ],
+            personalEntries: []
+        )
+
+        XCTAssertTrue(snapshot.blockedNumbers.isEmpty)
+        XCTAssertEqual(snapshot.identificationEntries.map(\.phoneNumber), [1_555_000_4444])
+        XCTAssertEqual(snapshot.identificationEntries.first?.label, "Label Me")
+        XCTAssertEqual(snapshot.entries.first?.action, .identify)
+    }
+
+    func testLabelOnlyModeKeepsPersonalAndCombinedEntriesBlocking() throws {
+        let originalMode = SpamBlockerShared.protectionMode
+        SpamBlockerShared.protectionMode = .labelOnly
+        defer { SpamBlockerShared.protectionMode = originalMode }
+
+        let personalOnly = makePersonalEntry(phoneNumber: 1_555_000_5555, displayName: "Manual")
+        let combined = makePersonalEntry(phoneNumber: 1_555_000_6666, displayName: "Combined")
+
+        let snapshot = try composeSnapshot(
+            repositoryRecords: [
+                makeRepositoryRecord(phoneNumber: 1_555_000_6666, displayName: "Repo Combined")
+            ],
+            personalEntries: [personalOnly, combined]
+        )
+
+        XCTAssertEqual(snapshot.blockedNumbers, [1_555_000_5555, 1_555_000_6666])
+        XCTAssertTrue(snapshot.identificationEntries.isEmpty)
+        XCTAssertEqual(snapshot.entries.map(\.action), [.block, .block])
+    }
     
     func testSearchNumbersRanksExactMatchesBeforeSuffixAndContains() throws {
         let snapshot = try composeSnapshot(
@@ -88,6 +136,30 @@ final class PhaseSixEffectiveBlockingAndSearchTests: XCTestCase {
         XCTAssertEqual(response.results.map(\.source), [.personal, .combined, .repo])
         XCTAssertEqual(response.results.map(\.record.phoneNumber), [666_1234, 888_1234, 777_1234])
         XCTAssertEqual(response.results.map(\.matchKind), [.suffix, .suffix, .suffix])
+    }
+
+    func testSearchResultsExposeEffectiveActionAndBlocklistProvenance() throws {
+        let originalMode = SpamBlockerShared.protectionMode
+        SpamBlockerShared.protectionMode = .labelOnly
+        defer { SpamBlockerShared.protectionMode = originalMode }
+
+        let snapshot = try composeSnapshot(
+            repositoryRecords: [
+                makeRepositoryRecord(
+                    phoneNumber: 777_1234,
+                    displayName: "Repo Only",
+                    sourceBlocklistIDs: ["PH/core"],
+                    sourceBlocklistTitles: ["Community Core"]
+                )
+            ],
+            personalEntries: []
+        )
+
+        let response = EffectiveBlocklistComposer.searchNumbers(matching: "1234", in: snapshot)
+
+        XCTAssertEqual(response.results.first?.effectiveAction, .identify)
+        XCTAssertEqual(response.results.first?.record.sourceBlocklistIDs, ["PH/core"])
+        XCTAssertEqual(response.results.first?.record.sourceBlocklistTitles, ["Community Core"])
     }
     
     func testSearchNumbersRanksMatchQualityBeforeSourcePriority() throws {
@@ -143,7 +215,9 @@ private extension PhaseSixEffectiveBlockingAndSearchTests {
         phoneNumber: Int64,
         displayName: String,
         tags: [String] = [],
-        notes: String = "Repository note"
+        notes: String = "Repository note",
+        sourceBlocklistIDs: [String] = [],
+        sourceBlocklistTitles: [String] = []
     ) -> BlockedNumberRecord {
         BlockedNumberRecord(
             phoneNumber: phoneNumber,
@@ -152,7 +226,9 @@ private extension PhaseSixEffectiveBlockingAndSearchTests {
             confidence: "high",
             aliases: [],
             tags: tags,
-            notes: notes
+            notes: notes,
+            sourceBlocklistIDs: sourceBlocklistIDs,
+            sourceBlocklistTitles: sourceBlocklistTitles
         )
     }
     

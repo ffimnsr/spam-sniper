@@ -2,8 +2,6 @@
 //  BlocklistSignatureVerifier.swift
 //  SpamSniper
 //
-//  Created by Codex on 3/22/26.
-//
 
 import Foundation
 import ObjectivePGP

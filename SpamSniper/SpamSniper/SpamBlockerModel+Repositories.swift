@@ -302,8 +302,21 @@ extension SpamBlockerModel {
             excluding: contactNumbers
         )
         let snapshot = try BlocklistSyncService.fetchEffectiveSnapshot()
+        let summary = try BlocklistDatabase.fetchSummary()
         applyEffectiveSnapshot(snapshot)
-        try? await reloadExtension()
+        var diagnostics = SpamBlockerShared.syncDiagnostics
+        diagnostics.lastSuccessfulSyncAt = summary.syncedAt
+        diagnostics.repositoryDisplayName = BlocklistSyncService.activeRepository.displayName
+        diagnostics.repositorySourceLabel = summary.source ?? snapshot.repositorySource
+        diagnostics.importedRepoEntryCount = summary.importedRepoEntryCount
+        diagnostics.excludedContactCount = summary.excludedContactCount
+        diagnostics.repositoryKeyFingerprint = currentRepositoryKeyFingerprint()
+        diagnostics.lastAttemptAt = Date()
+        diagnostics.lastAttemptSucceeded = true
+        diagnostics.lastAttemptMessage = "Blocklist selections updated successfully."
+        SpamBlockerShared.syncDiagnostics = diagnostics
+        syncDiagnostics = diagnostics
+        try await reloadExtensionAndRecordResult()
         extensionStatus = try await fetchExtensionStatus()
     }
 

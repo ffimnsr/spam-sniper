@@ -281,6 +281,31 @@ extension BlocklistSyncService {
         return uniqueSources.prefix(2).joined(separator: " + ") + " + etc."
     }
 
+    static func merge(_ record: BlockedNumberRecord, with existing: BlockedNumberRecord) -> BlockedNumberRecord {
+        BlockedNumberRecord(
+            phoneNumber: record.phoneNumber,
+            displayName: record.displayName,
+            category: record.category,
+            confidence: record.confidence,
+            aliases: record.aliases,
+            tags: record.tags,
+            notes: record.notes,
+            sourceBlocklistIDs: uniqueOrdered(existing.sourceBlocklistIDs + record.sourceBlocklistIDs),
+            sourceBlocklistTitles: uniqueOrdered(existing.sourceBlocklistTitles + record.sourceBlocklistTitles)
+        )
+    }
+
+    static func uniqueOrdered(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { value in
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty, seen.insert(normalized).inserted else {
+                return false
+            }
+            return true
+        }
+    }
+
     static let decoder = JSONDecoder()
 
     static let session: URLSession = {

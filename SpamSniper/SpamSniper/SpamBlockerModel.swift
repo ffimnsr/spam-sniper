@@ -2,8 +2,6 @@
 //  SpamBlockerModel.swift
 //  SpamSniper
 //
-//  Created by Codex on 3/19/26.
-//
 
 import CallKit
 import Observation
@@ -12,7 +10,7 @@ import UIKit
 @MainActor
 @Observable
 final class SpamBlockerModel {
-    static let defaultNumberSearchMessage = "Search the numbers currently included in SpamSniper’s blocking feed."
+    static let defaultNumberSearchMessage = "Search the numbers currently included in SpamSniper’s protection feed."
 
     enum ExtensionStatus: String {
         case enabled
@@ -38,6 +36,7 @@ final class SpamBlockerModel {
     }
 
     var isBlockingEnabled = SpamBlockerShared.isEnabled
+    var protectionMode = SpamBlockerShared.protectionMode
     var extensionStatus: ExtensionStatus = .unknown
     var contactsPermissionState: ContactFilterSnapshot.PermissionState = .notDetermined
     var blockedNumberCount = 0
@@ -93,6 +92,7 @@ final class SpamBlockerModel {
     var numberSearchResults: [BlockedNumberSearchResult] = []
     var isSearchingNumbers = false
     var numberSearchMessage: String?
+    var syncDiagnostics = SpamBlockerShared.syncDiagnostics
 
     // MARK: - Personal Blocklist
 
@@ -116,7 +116,9 @@ final class SpamBlockerModel {
             errorMessage = nil
         } catch {
             extensionStatus = fallbackExtensionStatus(for: error)
-            errorMessage = userFacingMessage(for: error)
+            let message = userFacingMessage(for: error)
+            errorMessage = message
+            recordSyncAttemptFailure(message: message)
         }
     }
 
@@ -140,6 +142,7 @@ final class SpamBlockerModel {
             extensionStatus = fallbackExtensionStatus(for: error)
             let message = userFacingMessage(for: error)
             errorMessage = message
+            recordSyncAttemptFailure(message: message)
             lastManualSyncStatus = manualSyncStatus(for: error, fallbackMessage: message)
         }
     }
@@ -158,7 +161,33 @@ final class SpamBlockerModel {
         SpamBlockerShared.isEnabled = enabled
 
         do {
-            try await reloadExtension()
+            try await reloadExtensionAndRecordResult()
+            extensionStatus = try await fetchExtensionStatus()
+        } catch {
+            errorMessage = userFacingMessage(for: error)
+        }
+
+        isBusy = false
+    }
+
+    func setProtectionMode(_ mode: ProtectionMode) async {
+        guard protectionMode != mode else { return }
+
+        isBusy = true
+        errorMessage = nil
+        protectionMode = mode
+        SpamBlockerShared.protectionMode = mode
+
+        if let snapshot = try? BlocklistSyncService.fetchEffectiveSnapshot() {
+            applyEffectiveSnapshot(snapshot)
+        }
+
+        if !numberSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await searchNumbers()
+        }
+
+        do {
+            try await reloadExtensionAndRecordResult()
             extensionStatus = try await fetchExtensionStatus()
         } catch {
             errorMessage = userFacingMessage(for: error)

@@ -64,13 +64,40 @@ extension ContentView {
 
         switch model.extensionStatus {
         case .enabled:
-            return "Calls matching synced blocklists or your personal list can be blocked by iOS."
+            return model.protectionMode == .labelOnly
+            ? "Repo entries are labeled by iOS, while personal entries continue blocking."
+            : "Calls matching synced blocklists or your personal list can be blocked by iOS."
         case .disabled:
             return "Turn on the Call Blocking extension in Settings for full protection."
         case .unknown:
             return "Checking call blocking status."
         case .unavailableOnSimulator:
             return "Simulator can preview the UI, but call blocking must be tested on a real iPhone."
+        }
+    }
+
+    var staleWarningTitle: String? {
+        switch model.syncDiagnostics.health {
+        case .healthy:
+            return nil
+        case .stale:
+            return "Sync data is stale"
+        case .neverSynced:
+            return "No successful sync yet"
+        }
+    }
+
+    var staleWarningDetail: String? {
+        switch model.syncDiagnostics.health {
+        case .healthy:
+            return nil
+        case .stale:
+            if let syncDate = model.syncDiagnostics.lastSuccessfulSyncAt {
+                return "The last successful sync was \(SpamBlockerModel.syncFormatter.localizedString(for: syncDate, relativeTo: Date())). Open Sync Diagnostics or run Sync Now."
+            }
+            return "Open Sync Diagnostics or run Sync Now."
+        case .neverSynced:
+            return "SpamSniper has not completed a successful sync on this device yet. Run Sync Now after setup."
         }
     }
 
@@ -197,7 +224,7 @@ extension ContentView {
         }
 
         return model.lastManualSyncStatus?.message
-        ?? "Fetch repository metadata, rebuild the blocking feed, and reload Call Blocking."
+        ?? "Fetch repository metadata, rebuild the protection feed, and reload Call Blocking."
     }
 
     var syncResultTint: Color {
@@ -248,7 +275,7 @@ extension ContentView {
     var repoDrivenDescription: String {
         """
         SpamSniper reads a repo index, lets you choose country-specific lists,
-        and merges synced entries with your personal list before building the final blocking feed.
+        and merges synced entries with your personal list before building the final protection feed.
         """
     }
 

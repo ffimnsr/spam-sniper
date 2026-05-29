@@ -422,8 +422,7 @@ private struct PersonalBlocklistTransferRecord: Codable {
     }
 
     func makeEntry() throws -> PersonalBlocklistEntry {
-        let digits = phoneNumber.filter(\.isNumber)
-        guard !digits.isEmpty, let number = Int64(digits), number > 0 else {
+        guard let number = try? PhoneNumberNormalizer.normalizedE164Digits(from: phoneNumber) else {
             throw PersonalBlocklistTransferError.invalidPhoneNumber(lineNumber: 0)
         }
 

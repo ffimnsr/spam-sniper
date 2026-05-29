@@ -32,9 +32,9 @@ final class PersonalBlocklistImportExportTests: XCTestCase {
         ]
         
         let payload = """
-        {"phoneNumber":"+15550001111","displayName":"Updated Existing"}
-        {"phoneNumber":"+15550002222","displayName":"First New"}
-        {"phoneNumber":"+15550002222","displayName":"Last New"}
+        {"phoneNumber":"+1 (555) 000-1111","displayName":"Updated Existing"}
+        {"phoneNumber":"+1 555 000 2222","displayName":"First New"}
+        {"phoneNumber":"+1 555 000 2222","displayName":"Last New"}
         """
         
         let preview = try store.previewImport(from: Data(payload.utf8))
@@ -84,6 +84,23 @@ final class PersonalBlocklistImportExportTests: XCTestCase {
         {"phoneNumber":"not-a-number","displayName":"Broken"}
         """
         
+        XCTAssertThrowsError(try store.previewImport(from: Data(payload.utf8))) { error in
+            XCTAssertEqual(
+                (error as? PersonalBlocklistTransferError)?.errorDescription,
+                PersonalBlocklistTransferError.invalidPhoneNumber(lineNumber: 1).errorDescription
+            )
+        }
+    }
+
+    func testPreviewImportRejectsNumbersWithoutCountryCode() throws {
+        let store = PersonalBlocklistStore.shared
+        let originalEntries = store.entries
+        defer { store.entries = originalEntries }
+
+        let payload = """
+        {"phoneNumber":"5550003333","displayName":"Local Only"}
+        """
+
         XCTAssertThrowsError(try store.previewImport(from: Data(payload.utf8))) { error in
             XCTAssertEqual(
                 (error as? PersonalBlocklistTransferError)?.errorDescription,

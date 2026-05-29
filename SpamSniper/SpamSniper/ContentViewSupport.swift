@@ -162,8 +162,8 @@ extension ContentView {
         } label: {
             actionTileContent(
                 symbol: "gearshape.2.fill",
-                title: "Repositories",
-                detail: model.isUsingCustomRepository ? "Custom source active" : "Community source active",
+                title: "Settings",
+                detail: "Repositories, protection mode, trust, and diagnostics.",
                 tint: theme.tint,
                 accessory: "chevron.right"
             )
@@ -193,7 +193,7 @@ extension ContentView {
             actionTileContent(
                 symbol: "magnifyingglass.circle.fill",
                 title: "Search",
-                detail: "Look up numbers in the final blocking feed.",
+                detail: "Look up numbers in the final protection feed.",
                 tint: theme.tint,
                 accessory: "chevron.right"
             )
@@ -267,6 +267,30 @@ extension ContentView {
             }
         }
     }
+
+    var staleSyncCard: some View {
+        Group {
+            if let staleWarningTitle, let staleWarningDetail {
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: "clock.badge.exclamationmark.fill")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(theme.warning)
+                        .frame(width: 42, height: 42)
+                        .background(theme.warning.opacity(0.14), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(staleWarningTitle)
+                            .font(.headline.weight(.bold))
+                        Text(staleWarningDetail)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .cardStyle(cornerRadius: 26)
+            }
+        }
+    }
     
     var statsRow: some View {
         VStack(spacing: 12) {
@@ -322,7 +346,7 @@ extension ContentView {
                 Text("NUMBERS")
                     .font(.caption2.weight(.black))
                     .foregroundStyle(.secondary)
-                Text("In blocking feed")
+                Text("In protection feed")
                     .font(.subheadline.weight(.bold))
                     .foregroundStyle(.primary)
             }

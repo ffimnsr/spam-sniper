@@ -6,11 +6,14 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var model: SpamBlockerModel
     @State private var isAddRepositoryPresented = false
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         Form {
+            protectionModeSection
             repositoriesSection
             trustedKeysSection
+            diagnosticsSection
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
@@ -31,7 +34,29 @@ struct SettingsView: View {
             EditRepositorySheet(model: model)
         }
     }
-    
+
+    private var protectionModeSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    protectionModeButton(.block)
+                    protectionModeButton(.labelOnly)
+                }
+
+                Text(model.protectionMode.detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 4)
+        } header: {
+            Text("Repo Protection Mode")
+        } footer: {
+            Text("Choose whether synced repository entries should block calls or only label them in iOS. Personal entries continue blocking in either mode.")
+                .font(.footnote)
+        }
+    }
+
     // MARK: Repositories list
     
     private var repositoriesSection: some View {
@@ -83,6 +108,77 @@ struct SettingsView: View {
             Text("Manage the OpenPGP public keys used to verify repository metadata and downloaded blocklist signatures before sync.")
                 .font(.footnote)
         }
+    }
+
+    private var diagnosticsSection: some View {
+        Section {
+            NavigationLink {
+                SyncDiagnosticsView(model: model)
+            } label: {
+                HStack {
+                    Label("Sync Diagnostics", systemImage: "stethoscope")
+                    Spacer()
+                    Text(diagnosticsBadgeText)
+                        .foregroundStyle(diagnosticsBadgeColor)
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+        } footer: {
+            Text("Review the last successful sync, fallback usage, imported counts, contacts exclusions, signing-key fingerprint, and extension reload state.")
+                .font(.footnote)
+        }
+    }
+
+    private var diagnosticsBadgeText: String {
+        switch model.syncDiagnostics.health {
+        case .healthy:
+            return "Healthy"
+        case .stale:
+            return "Stale"
+        case .neverSynced:
+            return "Never"
+        }
+    }
+
+    private var diagnosticsBadgeColor: Color {
+        switch model.syncDiagnostics.health {
+        case .healthy:
+            return .green
+        case .stale, .neverSynced:
+            return .orange
+        }
+    }
+
+    private var buttonGradientColors: [Color] {
+        AppPalette(colorScheme: colorScheme).primaryButton
+    }
+
+    private func protectionModeButton(_ mode: ProtectionMode) -> some View {
+        Button {
+            Task {
+                await model.setProtectionMode(mode)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: mode == .block ? "hand.raised.fill" : "tag.fill")
+                    .font(.caption.weight(.bold))
+                Text(mode.title)
+                    .font(.caption.weight(.bold))
+            }
+            .foregroundStyle(model.protectionMode == mode ? .white : .primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(
+                model.protectionMode == mode
+                ? AnyShapeStyle(LinearGradient(colors: buttonGradientColors, startPoint: .leading, endPoint: .trailing))
+                : AnyShapeStyle(.regularMaterial),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isBusy)
+        .opacity(model.isBusy ? 0.72 : 1)
     }
 }
 
@@ -141,6 +237,88 @@ private struct RepositoryRowView: View {
             }
         }
         .deleteDisabled(repo.isBuiltIn)
+    }
+}
+
+struct SyncDiagnosticsView: View {
+    @Bindable var model: SpamBlockerModel
+
+    var body: some View {
+        List {
+            Section("Sync Health") {
+                LabeledContent("Status", value: syncHealthTitle)
+                LabeledContent("Last successful sync", value: lastSuccessfulSyncValue)
+                if let syncDate = model.syncDiagnostics.lastSuccessfulSyncAt {
+                    LabeledContent("Synced on", value: syncDate.formatted(date: .abbreviated, time: .shortened))
+                }
+                if !model.syncDiagnostics.lastAttemptMessage.isEmpty {
+                    LabeledContent("Last attempt", value: model.syncDiagnostics.lastAttemptMessage)
+                }
+            }
+
+            Section("Repository") {
+                LabeledContent("Repository", value: model.syncDiagnostics.repositoryDisplayName.ifEmpty("Unknown"))
+                LabeledContent("Resolved source", value: model.syncDiagnostics.repositorySourceLabel.ifEmpty("Unknown"))
+                LabeledContent("Bundled fallback", value: model.syncDiagnostics.usedBundledFallback ? "Used" : "Not used")
+                LabeledContent("Signing key", value: model.syncDiagnostics.repositoryKeyFingerprint.ifEmpty("Unknown"))
+            }
+
+            Section("Counts") {
+                LabeledContent("Imported repo entries", value: "\(model.syncDiagnostics.importedRepoEntryCount)")
+                LabeledContent("Excluded contacts", value: "\(model.syncDiagnostics.excludedContactCount)")
+                LabeledContent("Effective feed size", value: "\(model.blockedNumberCount)")
+            }
+
+            Section("Extension") {
+                LabeledContent("Last reload", value: extensionReloadTitle)
+                if let reloadDate = model.syncDiagnostics.lastExtensionReloadAt {
+                    LabeledContent("Reloaded on", value: reloadDate.formatted(date: .abbreviated, time: .shortened))
+                }
+                if !model.syncDiagnostics.lastExtensionReloadMessage.isEmpty {
+                    Text(model.syncDiagnostics.lastExtensionReloadMessage)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .navigationTitle("Sync Diagnostics")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var syncHealthTitle: String {
+        switch model.syncDiagnostics.health {
+        case .healthy:
+            return "Healthy"
+        case .stale:
+            return "Stale"
+        case .neverSynced:
+            return "Never synced"
+        }
+    }
+
+    private var lastSuccessfulSyncValue: String {
+        guard let date = model.syncDiagnostics.lastSuccessfulSyncAt else {
+            return "No successful sync yet"
+        }
+
+        return SpamBlockerModel.syncFormatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private var extensionReloadTitle: String {
+        switch model.syncDiagnostics.lastExtensionReloadSucceeded {
+        case true:
+            return "Succeeded"
+        case false:
+            return "Failed"
+        case nil:
+            return "No reload recorded"
+        }
+    }
+}
+
+private extension String {
+    func ifEmpty(_ fallback: String) -> String {
+        trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallback : self
     }
 }
 

@@ -2,10 +2,184 @@
 //  BlocklistModels.swift
 //  SpamSniper
 //
-//  Created by Codex on 3/19/26.
-//
 
 import Foundation
+
+enum ProtectionMode: String, Codable, CaseIterable {
+    case block
+    case labelOnly
+
+    var title: String {
+        switch self {
+        case .block:
+            return "Block"
+        case .labelOnly:
+            return "Label Only"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .block:
+            return "Repo and personal entries are sent to iOS as blocking entries."
+        case .labelOnly:
+            return "Repo entries are labeled by iOS instead of blocked. Personal entries still block."
+        }
+    }
+}
+
+enum EffectiveNumberAction: String, Codable {
+    case block
+    case identify
+
+    var title: String {
+        switch self {
+        case .block:
+            return "Blocking"
+        case .identify:
+            return "Label Only"
+        }
+    }
+}
+
+struct SyncDiagnosticsSnapshot: Codable, Equatable {
+    enum SyncHealth: Equatable {
+        case healthy
+        case stale
+        case neverSynced
+    }
+
+    var lastSuccessfulSyncAt: Date?
+    var repositoryDisplayName: String
+    var repositorySourceLabel: String
+    var usedBundledFallback: Bool
+    var importedRepoEntryCount: Int
+    var excludedContactCount: Int
+    var repositoryKeyFingerprint: String
+    var lastExtensionReloadAt: Date?
+    var lastExtensionReloadSucceeded: Bool?
+    var lastExtensionReloadMessage: String
+    var lastAttemptAt: Date?
+    var lastAttemptSucceeded: Bool?
+    var lastAttemptMessage: String
+
+    init(
+        lastSuccessfulSyncAt: Date? = nil,
+        repositoryDisplayName: String = "",
+        repositorySourceLabel: String = "",
+        usedBundledFallback: Bool = false,
+        importedRepoEntryCount: Int = 0,
+        excludedContactCount: Int = 0,
+        repositoryKeyFingerprint: String = "",
+        lastExtensionReloadAt: Date? = nil,
+        lastExtensionReloadSucceeded: Bool? = nil,
+        lastExtensionReloadMessage: String = "",
+        lastAttemptAt: Date? = nil,
+        lastAttemptSucceeded: Bool? = nil,
+        lastAttemptMessage: String = ""
+    ) {
+        self.lastSuccessfulSyncAt = lastSuccessfulSyncAt
+        self.repositoryDisplayName = repositoryDisplayName
+        self.repositorySourceLabel = repositorySourceLabel
+        self.usedBundledFallback = usedBundledFallback
+        self.importedRepoEntryCount = importedRepoEntryCount
+        self.excludedContactCount = excludedContactCount
+        self.repositoryKeyFingerprint = repositoryKeyFingerprint
+        self.lastExtensionReloadAt = lastExtensionReloadAt
+        self.lastExtensionReloadSucceeded = lastExtensionReloadSucceeded
+        self.lastExtensionReloadMessage = lastExtensionReloadMessage
+        self.lastAttemptAt = lastAttemptAt
+        self.lastAttemptSucceeded = lastAttemptSucceeded
+        self.lastAttemptMessage = lastAttemptMessage
+    }
+
+    func health(relativeTo referenceDate: Date = Date()) -> SyncHealth {
+        guard let lastSuccessfulSyncAt else {
+            return .neverSynced
+        }
+
+        let staleInterval: TimeInterval = 60 * 60 * 24 * 3
+        return referenceDate.timeIntervalSince(lastSuccessfulSyncAt) > staleInterval ? .stale : .healthy
+    }
+
+    var health: SyncHealth {
+        health(relativeTo: Date())
+    }
+}
+
+enum PhoneNumberNormalizationError: LocalizedError, Equatable {
+    case empty
+    case missingCountryCode
+    case invalidCharacters
+    case tooShort
+    case tooLong
+    case notNumeric
+
+    var errorDescription: String? {
+        switch self {
+        case .empty:
+            return "Enter a phone number."
+        case .missingCountryCode:
+            return "Enter the number with a leading + and country code."
+        case .invalidCharacters:
+            return "Use only digits, spaces, parentheses, hyphens, periods, and a leading +."
+        case .tooShort:
+            return "The phone number is too short to be valid."
+        case .tooLong:
+            return "The phone number is too long to be valid."
+        case .notNumeric:
+            return "Enter a valid phone number."
+        }
+    }
+}
+
+enum PhoneNumberNormalizer {
+    nonisolated static func normalizedE164Digits(from rawValue: String) throws -> Int64 {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw PhoneNumberNormalizationError.empty
+        }
+
+        let allowedPunctuation = CharacterSet(charactersIn: "+-(). ")
+        for scalar in trimmed.unicodeScalars {
+            if CharacterSet.decimalDigits.contains(scalar) || allowedPunctuation.contains(scalar) {
+                continue
+            }
+            throw PhoneNumberNormalizationError.invalidCharacters
+        }
+
+        let cleaned = trimmed
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: "(", with: "")
+            .replacingOccurrences(of: ")", with: "")
+            .replacingOccurrences(of: ".", with: "")
+
+        guard cleaned.first == "+" else {
+            throw PhoneNumberNormalizationError.missingCountryCode
+        }
+
+        let digits = String(cleaned.dropFirst())
+        guard digits.allSatisfy(\.isNumber) else {
+            throw PhoneNumberNormalizationError.notNumeric
+        }
+        guard digits.count >= 8 else {
+            throw PhoneNumberNormalizationError.tooShort
+        }
+        guard digits.count <= 15 else {
+            throw PhoneNumberNormalizationError.tooLong
+        }
+        guard let phoneNumber = Int64(digits), phoneNumber > 0 else {
+            throw PhoneNumberNormalizationError.notNumeric
+        }
+
+        return phoneNumber
+    }
+
+    nonisolated static func normalizedE164String(from rawValue: String) throws -> String {
+        "+\(try normalizedE164Digits(from: rawValue))"
+    }
+}
 
 struct BlocklistDocument: Decodable {
     let source: String
@@ -45,6 +219,8 @@ struct BlockedNumberRecord: Identifiable, Equatable {
     let aliases: [String]
     let tags: [String]
     let notes: String
+    let sourceBlocklistIDs: [String]
+    let sourceBlocklistTitles: [String]
 
     var id: Int64 { phoneNumber }
 
@@ -56,9 +232,30 @@ struct BlockedNumberRecord: Identifiable, Equatable {
         Self.normalizedDigits(from: phoneNumberE164)
     }
 
+    nonisolated init(
+        phoneNumber: Int64,
+        displayName: String,
+        category: String,
+        confidence: String,
+        aliases: [String],
+        tags: [String],
+        notes: String,
+        sourceBlocklistIDs: [String] = [],
+        sourceBlocklistTitles: [String] = []
+    ) {
+        self.phoneNumber = phoneNumber
+        self.displayName = displayName
+        self.category = category
+        self.confidence = confidence
+        self.aliases = aliases
+        self.tags = tags
+        self.notes = notes
+        self.sourceBlocklistIDs = sourceBlocklistIDs
+        self.sourceBlocklistTitles = sourceBlocklistTitles
+    }
+
     nonisolated static func from(document: BlocklistEntryDocument) -> BlockedNumberRecord? {
-        let digits = document.phoneNumberE164.filter(\.isNumber)
-        guard let phoneNumber = Int64(digits), phoneNumber > 0 else {
+        guard let phoneNumber = try? PhoneNumberNormalizer.normalizedE164Digits(from: document.phoneNumberE164) else {
             return nil
         }
 
@@ -69,7 +266,9 @@ struct BlockedNumberRecord: Identifiable, Equatable {
             confidence: document.confidence,
             aliases: document.aliases,
             tags: document.tags,
-            notes: document.notes
+            notes: document.notes,
+            sourceBlocklistIDs: [],
+            sourceBlocklistTitles: []
         )
     }
 
@@ -86,6 +285,7 @@ struct BlockedNumberSearchResult: Identifiable, Equatable {
     let source: ResultSource
     /// Personal entry attached to this result (non-nil when source is .personal or .combined).
     let personalEntry: PersonalBlocklistEntry?
+    let effectiveAction: EffectiveNumberAction
 
     var id: Int64 { record.id }
 
@@ -94,13 +294,15 @@ struct BlockedNumberSearchResult: Identifiable, Equatable {
         matchedDigits: String,
         matchKind: MatchKind,
         source: ResultSource = .repo,
-        personalEntry: PersonalBlocklistEntry? = nil
+        personalEntry: PersonalBlocklistEntry? = nil,
+        effectiveAction: EffectiveNumberAction = .block
     ) {
         self.record = record
         self.matchedDigits = matchedDigits
         self.matchKind = matchKind
         self.source = source
         self.personalEntry = personalEntry
+        self.effectiveAction = effectiveAction
     }
 
     enum MatchKind: String, Equatable {
@@ -123,8 +325,23 @@ struct BlockedNumberSearchResult: Identifiable, Equatable {
 struct BlocklistSnapshot {
     let records: [BlockedNumberRecord]
     let blocklistIDs: [String]
+    let blocklistTitles: [String]
     let source: String
     let syncedAt: Date?
+
+    nonisolated init(
+        records: [BlockedNumberRecord],
+        blocklistIDs: [String],
+        blocklistTitles: [String] = [],
+        source: String,
+        syncedAt: Date?
+    ) {
+        self.records = records
+        self.blocklistIDs = blocklistIDs
+        self.blocklistTitles = blocklistTitles
+        self.source = source
+        self.syncedAt = syncedAt
+    }
 
     // swiftlint:disable:next unused_declaration
     var blockedNumbers: [Int64] {
@@ -478,6 +695,8 @@ extension BlockedNumberRecord {
         && lhs.aliases == rhs.aliases
         && lhs.tags == rhs.tags
         && lhs.notes == rhs.notes
+        && lhs.sourceBlocklistIDs == rhs.sourceBlocklistIDs
+        && lhs.sourceBlocklistTitles == rhs.sourceBlocklistTitles
     }
 }
 
@@ -488,6 +707,7 @@ extension BlockedNumberSearchResult {
         && lhs.matchKind == rhs.matchKind
         && lhs.source == rhs.source
         && lhs.personalEntry == rhs.personalEntry
+        && lhs.effectiveAction == rhs.effectiveAction
     }
 }
 

@@ -2,8 +2,6 @@
 //  BlocklistDatabase.swift
 //  SpamSniper
 //
-//  Created by Codex on 3/19/26.
-//
 
 import Foundation
 import SQLite3
@@ -18,8 +16,29 @@ enum BlocklistDatabaseError: Error {
 struct BlocklistDatabaseSummary {
     let totalEntries: Int
     let blocklistIDs: [String]
+    let blocklistTitles: [String]
     let source: String?
     let syncedAt: Date?
+    let importedRepoEntryCount: Int
+    let excludedContactCount: Int
+
+    init(
+        totalEntries: Int,
+        blocklistIDs: [String],
+        blocklistTitles: [String] = [],
+        source: String?,
+        syncedAt: Date?,
+        importedRepoEntryCount: Int = 0,
+        excludedContactCount: Int = 0
+    ) {
+        self.totalEntries = totalEntries
+        self.blocklistIDs = blocklistIDs
+        self.blocklistTitles = blocklistTitles
+        self.source = source
+        self.syncedAt = syncedAt
+        self.importedRepoEntryCount = importedRepoEntryCount
+        self.excludedContactCount = excludedContactCount
+    }
 }
 
 struct BlocklistSearchResponse {
@@ -39,9 +58,24 @@ enum BlocklistDatabase {
                     confidence TEXT NOT NULL,
                     aliases_json TEXT NOT NULL,
                     tags_json TEXT NOT NULL,
-                    notes TEXT NOT NULL
+                    notes TEXT NOT NULL,
+                    source_blocklist_ids_json TEXT NOT NULL DEFAULT '[]',
+                    source_blocklist_titles_json TEXT NOT NULL DEFAULT '[]'
                 );
                 """,
+                database: database
+            )
+
+            try addColumnIfNeeded(
+                "source_blocklist_ids_json",
+                definition: "TEXT NOT NULL DEFAULT '[]'",
+                to: "blocked_numbers",
+                database: database
+            )
+            try addColumnIfNeeded(
+                "source_blocklist_titles_json",
+                definition: "TEXT NOT NULL DEFAULT '[]'",
+                to: "blocked_numbers",
                 database: database
             )
 
@@ -60,8 +94,11 @@ enum BlocklistDatabase {
     static func replaceEntries(
         _ records: [BlockedNumberRecord],
         blocklistIDs: [String],
+        blocklistTitles: [String],
         source: String,
-        syncedAt: Date
+        syncedAt: Date,
+        importedRepoEntryCount: Int,
+        excludedContactCount: Int
     ) throws {
         try withDatabase { database in
             try execute("BEGIN IMMEDIATE TRANSACTION;", database: database)
@@ -78,8 +115,10 @@ enum BlocklistDatabase {
                     confidence,
                     aliases_json,
                     tags_json,
-                    notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?);
+                    notes,
+                    source_blocklist_ids_json,
+                    source_blocklist_titles_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """
 
                 var statement: OpaquePointer?
@@ -96,6 +135,8 @@ enum BlocklistDatabase {
 
                     let aliasesJSON = try String(data: encoder.encode(record.aliases), encoding: .utf8).unwrap()
                     let tagsJSON = try String(data: encoder.encode(record.tags), encoding: .utf8).unwrap()
+                    let sourceBlocklistIDsJSON = try String(data: encoder.encode(record.sourceBlocklistIDs), encoding: .utf8).unwrap()
+                    let sourceBlocklistTitlesJSON = try String(data: encoder.encode(record.sourceBlocklistTitles), encoding: .utf8).unwrap()
 
                     sqlite3_bind_int64(statement, 1, record.phoneNumber)
                     sqlite3_bind_text(statement, 2, record.displayName, -1, transientDestructor)
@@ -104,6 +145,8 @@ enum BlocklistDatabase {
                     sqlite3_bind_text(statement, 5, aliasesJSON, -1, transientDestructor)
                     sqlite3_bind_text(statement, 6, tagsJSON, -1, transientDestructor)
                     sqlite3_bind_text(statement, 7, record.notes, -1, transientDestructor)
+                    sqlite3_bind_text(statement, 8, sourceBlocklistIDsJSON, -1, transientDestructor)
+                    sqlite3_bind_text(statement, 9, sourceBlocklistTitlesJSON, -1, transientDestructor)
 
                     guard sqlite3_step(statement) == SQLITE_DONE else {
                         throw BlocklistDatabaseError.executionFailed(lastErrorMessage(from: database))
@@ -111,11 +154,14 @@ enum BlocklistDatabase {
                 }
 
                 try setMetadataValue(blocklistIDs.joined(separator: ","), forKey: "blocklist_ids", database: database)
+                try setMetadataValue(blocklistTitles.joined(separator: ","), forKey: "blocklist_titles", database: database)
                 if let firstBlocklistID = blocklistIDs.first {
                     try setMetadataValue(firstBlocklistID, forKey: "blocklist_id", database: database)
                 }
                 try setMetadataValue(source, forKey: "source", database: database)
                 try setMetadataValue(iso8601Formatter.string(from: syncedAt), forKey: "synced_at", database: database)
+                try setMetadataValue(String(importedRepoEntryCount), forKey: "imported_repo_entry_count", database: database)
+                try setMetadataValue(String(excludedContactCount), forKey: "excluded_contact_count", database: database)
                 try execute("COMMIT;", database: database)
             } catch {
                 try? execute("ROLLBACK;", database: database)
@@ -129,6 +175,7 @@ enum BlocklistDatabase {
             let query =
             """
             SELECT phone_number, display_name, category, confidence, aliases_json, tags_json, notes
+            , source_blocklist_ids_json, source_blocklist_titles_json
             FROM blocked_numbers
             ORDER BY phone_number ASC;
             """
@@ -156,6 +203,14 @@ enum BlocklistDatabase {
                     from: Data(sqliteString(from: statement, column: 5).utf8)
                 )
                 let notes = sqliteString(from: statement, column: 6)
+                let sourceBlocklistIDs = try decoder.decode(
+                    [String].self,
+                    from: Data(sqliteString(from: statement, column: 7).utf8)
+                )
+                let sourceBlocklistTitles = try decoder.decode(
+                    [String].self,
+                    from: Data(sqliteString(from: statement, column: 8).utf8)
+                )
 
                 records.append(
                     BlockedNumberRecord(
@@ -165,7 +220,9 @@ enum BlocklistDatabase {
                         confidence: confidence,
                         aliases: aliases,
                         tags: tags,
-                        notes: notes
+                        notes: notes,
+                        sourceBlocklistIDs: sourceBlocklistIDs,
+                        sourceBlocklistTitles: sourceBlocklistTitles
                     )
                 )
             }
@@ -173,6 +230,7 @@ enum BlocklistDatabase {
             return BlocklistSnapshot(
                 records: records,
                 blocklistIDs: metadataValues(forKeys: ["blocklist_ids", "blocklist_id"], database: database),
+                blocklistTitles: metadataValues(forKeys: ["blocklist_titles"], database: database),
                 source: metadataValue(forKey: "source", database: database) ?? "Unknown source",
                 syncedAt: metadataValue(forKey: "synced_at", database: database)
                     .flatMap { iso8601Formatter.date(from: $0) }
@@ -199,9 +257,12 @@ enum BlocklistDatabase {
             return BlocklistDatabaseSummary(
                 totalEntries: totalEntries,
                 blocklistIDs: metadataValues(forKeys: ["blocklist_ids", "blocklist_id"], database: database),
+                blocklistTitles: metadataValues(forKeys: ["blocklist_titles"], database: database),
                 source: metadataValue(forKey: "source", database: database),
                 syncedAt: metadataValue(forKey: "synced_at", database: database)
-                    .flatMap { iso8601Formatter.date(from: $0) }
+                    .flatMap { iso8601Formatter.date(from: $0) },
+                importedRepoEntryCount: Int(metadataValue(forKey: "imported_repo_entry_count", database: database) ?? "") ?? 0,
+                excludedContactCount: Int(metadataValue(forKey: "excluded_contact_count", database: database) ?? "") ?? 0
             )
         }
     }

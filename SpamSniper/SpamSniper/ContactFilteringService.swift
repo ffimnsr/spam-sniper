@@ -2,8 +2,6 @@
 //  ContactFilteringService.swift
 //  SpamSniper
 //
-//  Created by Codex on 3/19/26.
-//
 
 import Contacts
 

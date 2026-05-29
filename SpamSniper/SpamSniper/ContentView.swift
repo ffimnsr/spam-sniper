@@ -14,6 +14,7 @@ struct ContentView: View {
                     quickActionsSection
                     statsRow
                     detailsCard
+                    staleSyncCard
                     syncResultCard
 
                     if let errorMessage = model.errorMessage {

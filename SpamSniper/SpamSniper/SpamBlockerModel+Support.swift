@@ -113,6 +113,20 @@ extension SpamBlockerModel {
         }
     }
 
+    func reloadExtensionAndRecordResult(at date: Date = Date()) async throws {
+        do {
+            try await reloadExtension()
+            recordExtensionReloadResult(succeeded: true, message: "The Call Directory extension reloaded successfully.", at: date)
+        } catch {
+            recordExtensionReloadResult(
+                succeeded: false,
+                message: userFacingMessage(for: error),
+                at: date
+            )
+            throw error
+        }
+    }
+
     func fetchExtensionStatus() async throws -> ExtensionStatus {
 #if targetEnvironment(simulator)
         return .unavailableOnSimulator
@@ -155,11 +169,13 @@ extension SpamBlockerModel {
     func refreshStoredState() {
         SpamBlockerShared.registerDefaults()
         isBlockingEnabled = SpamBlockerShared.isEnabled
+        protectionMode = SpamBlockerShared.protectionMode
         contactsPermissionState = ContactFilteringService.currentPermissionState()
         contactsStatusDescription = contactsPermissionState.description
         repositories = [.builtIn] + BlocklistSyncService.repositories
         activeRepositoryID = BlocklistSyncService.activeRepository.id
         trustedKeys = SpamBlockerShared.trustedKeys
+        syncDiagnostics = SpamBlockerShared.syncDiagnostics
         refreshPersonalEntries()
     }
 
@@ -183,6 +199,7 @@ extension SpamBlockerModel {
         blocklistSignatureStatus = result.signatureStatus
         applySummary(result.databaseSummary, effectiveSnapshot: result.effectiveSnapshot)
         extensionStatus = result.extensionStatus
+        persistSuccessfulSyncDiagnostics(result)
         refreshStoredState()
     }
 
@@ -232,6 +249,7 @@ extension SpamBlockerModel {
     }
 
     func coordinatedRefresh(forceSync: Bool) async throws -> RefreshCoordinatorResult {
+        let refreshDate = Date()
         let repositoryFetch = try await BlocklistSyncService.fetchRepositoryResult()
         let selections = try BlocklistSyncService.resolveSelections(in: repositoryFetch.document)
         let signatureStatus = await signatureStatusDescription(for: selections)
@@ -246,8 +264,13 @@ extension SpamBlockerModel {
         }
 
         let effectiveSnapshot = try BlocklistSyncService.fetchEffectiveSnapshot()
-        try? await reloadExtension()
-        let extensionStatus = try await fetchExtensionStatus()
+        let extensionStatus: ExtensionStatus
+        do {
+            try await reloadExtensionAndRecordResult(at: refreshDate)
+            extensionStatus = try await fetchExtensionStatus()
+        } catch {
+            extensionStatus = fallbackExtensionStatus(for: error)
+        }
 
         return RefreshCoordinatorResult(
             repositoryFetch: repositoryFetch,
@@ -257,6 +280,50 @@ extension SpamBlockerModel {
             effectiveSnapshot: effectiveSnapshot,
             extensionStatus: extensionStatus
         )
+    }
+
+    func recordExtensionReloadResult(succeeded: Bool, message: String, at date: Date = Date()) {
+        var diagnostics = SpamBlockerShared.syncDiagnostics
+        diagnostics.lastExtensionReloadAt = date
+        diagnostics.lastExtensionReloadSucceeded = succeeded
+        diagnostics.lastExtensionReloadMessage = message
+        SpamBlockerShared.syncDiagnostics = diagnostics
+        syncDiagnostics = diagnostics
+    }
+
+    func recordSyncAttemptFailure(message: String, at date: Date = Date()) {
+        var diagnostics = SpamBlockerShared.syncDiagnostics
+        diagnostics.lastAttemptAt = date
+        diagnostics.lastAttemptSucceeded = false
+        diagnostics.lastAttemptMessage = message
+        SpamBlockerShared.syncDiagnostics = diagnostics
+        syncDiagnostics = diagnostics
+    }
+
+    func persistSuccessfulSyncDiagnostics(_ result: RefreshCoordinatorResult, at date: Date = Date()) {
+        var diagnostics = SpamBlockerShared.syncDiagnostics
+        diagnostics.lastSuccessfulSyncAt = result.databaseSummary.syncedAt
+        diagnostics.repositoryDisplayName = BlocklistSyncService.activeRepository.displayName
+        diagnostics.repositorySourceLabel = result.databaseSummary.source ?? result.effectiveSnapshot.repositorySource
+        diagnostics.usedBundledFallback = result.repositoryFetch.usedBundledSeedFallback
+        diagnostics.importedRepoEntryCount = result.databaseSummary.importedRepoEntryCount
+        diagnostics.excludedContactCount = result.databaseSummary.excludedContactCount
+        diagnostics.repositoryKeyFingerprint = currentRepositoryKeyFingerprint()
+        diagnostics.lastAttemptAt = date
+        diagnostics.lastAttemptSucceeded = true
+        diagnostics.lastAttemptMessage = result.repositoryFetch.usedBundledSeedFallback
+        ? "Sync completed using the bundled fallback repository."
+        : "Sync completed successfully."
+        SpamBlockerShared.syncDiagnostics = diagnostics
+        syncDiagnostics = diagnostics
+    }
+
+    func currentRepositoryKeyFingerprint() -> String {
+        if BlocklistSyncService.activeRepository.isBuiltIn {
+            return "BUILTIN"
+        }
+
+        return BlocklistSyncService.activeRepository.trustedKeyFingerprint ?? ""
     }
 
     func signatureStatusDescription(for selections: [StoredBlocklistSelection]) async -> String {
@@ -279,7 +346,7 @@ extension SpamBlockerModel {
 
         return ManualSyncStatus(
             title: "Sync complete",
-            message: "SpamSniper refreshed repository metadata, rebuilt the blocking feed, and reloaded the Call Directory extension.",
+            message: "SpamSniper refreshed repository metadata, rebuilt the protection feed, and reloaded the Call Directory extension.",
             style: .success,
             recordedAt: date
         )
@@ -407,7 +474,7 @@ extension SpamBlockerModel {
         }
 
         do {
-            try await reloadExtension()
+            try await reloadExtensionAndRecordResult()
             extensionStatus = try await fetchExtensionStatus()
             return true
         } catch {

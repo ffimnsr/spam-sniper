@@ -69,6 +69,39 @@ extension BlocklistDatabase {
         }
     }
 
+    static func addColumnIfNeeded(
+        _ columnName: String,
+        definition: String,
+        to tableName: String,
+        database: OpaquePointer?
+    ) throws {
+        guard !columnExists(columnName, in: tableName, database: database) else {
+            return
+        }
+
+        try execute(
+            "ALTER TABLE \(tableName) ADD COLUMN \(columnName) \(definition);",
+            database: database
+        )
+    }
+
+    static func columnExists(_ columnName: String, in tableName: String, database: OpaquePointer?) -> Bool {
+        let sql = "PRAGMA table_info(\(tableName));"
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            return false
+        }
+        defer { sqlite3_finalize(statement) }
+
+        while sqlite3_step(statement) == SQLITE_ROW {
+            if sqliteString(from: statement, column: 1) == columnName {
+                return true
+            }
+        }
+
+        return false
+    }
+
     static func metadataValue(forKey key: String, database: OpaquePointer?) -> String? {
         let sql = "SELECT value FROM metadata WHERE key = ? LIMIT 1;"
         var statement: OpaquePointer?
@@ -108,6 +141,8 @@ extension BlocklistDatabase {
         let aliases = try decoder.decode([String].self, from: Data(sqliteString(from: statement, column: 4).utf8))
         let tags = try decoder.decode([String].self, from: Data(sqliteString(from: statement, column: 5).utf8))
         let notes = sqliteString(from: statement, column: 6)
+        let sourceBlocklistIDs = try decoder.decode([String].self, from: Data(sqliteString(from: statement, column: 7).utf8))
+        let sourceBlocklistTitles = try decoder.decode([String].self, from: Data(sqliteString(from: statement, column: 8).utf8))
 
         return BlockedNumberRecord(
             phoneNumber: phoneNumber,
@@ -116,7 +151,9 @@ extension BlocklistDatabase {
             confidence: confidence,
             aliases: aliases,
             tags: tags,
-            notes: notes
+            notes: notes,
+            sourceBlocklistIDs: sourceBlocklistIDs,
+            sourceBlocklistTitles: sourceBlocklistTitles
         )
     }
 
@@ -127,7 +164,8 @@ extension BlocklistDatabase {
     ) throws -> OpaquePointer? {
         let query =
         """
-        SELECT phone_number, display_name, category, confidence, aliases_json, tags_json, notes
+        SELECT phone_number, display_name, category, confidence, aliases_json, tags_json, notes,
+               source_blocklist_ids_json, source_blocklist_titles_json
         FROM blocked_numbers
         WHERE CAST(phone_number AS TEXT) LIKE ?
         ORDER BY

@@ -2,8 +2,6 @@
 //  BlocklistSyncService.swift
 //  SpamSniper
 //
-//  Created by Codex on 3/19/26.
-//
 
 import Foundation
 
@@ -149,14 +147,35 @@ enum BlocklistSyncService {
 
         var deduplicatedRecords: [Int64: BlockedNumberRecord] = [:]
         var sourceLabels: [String] = []
+        var excludedNumbers = Set<Int64>()
 
         for selection in selections {
             let document = try await loadDocument(for: selection)
             sourceLabels.append(document.source)
 
-            for record in document.entries.compactMap(BlockedNumberRecord.from(document:))
-            where !contactNumbers.contains(record.phoneNumber) {
-                deduplicatedRecords[record.phoneNumber] = record
+            for baseRecord in document.entries.compactMap(BlockedNumberRecord.from(document:)) {
+                if contactNumbers.contains(baseRecord.phoneNumber) {
+                    excludedNumbers.insert(baseRecord.phoneNumber)
+                    continue
+                }
+
+                let record = BlockedNumberRecord(
+                    phoneNumber: baseRecord.phoneNumber,
+                    displayName: baseRecord.displayName,
+                    category: baseRecord.category,
+                    confidence: baseRecord.confidence,
+                    aliases: baseRecord.aliases,
+                    tags: baseRecord.tags,
+                    notes: baseRecord.notes,
+                    sourceBlocklistIDs: [selection.id],
+                    sourceBlocklistTitles: [selection.title]
+                )
+
+                if let existing = deduplicatedRecords[record.phoneNumber] {
+                    deduplicatedRecords[record.phoneNumber] = merge(record, with: existing)
+                } else {
+                    deduplicatedRecords[record.phoneNumber] = record
+                }
             }
         }
 
@@ -164,8 +183,11 @@ enum BlocklistSyncService {
         try BlocklistDatabase.replaceEntries(
             records,
             blocklistIDs: selections.map(\.id),
+            blocklistTitles: selections.map(\.title),
             source: combinedSourceLabel(from: sourceLabels),
-            syncedAt: Date()
+            syncedAt: Date(),
+            importedRepoEntryCount: records.count,
+            excludedContactCount: excludedNumbers.count
         )
     }
 

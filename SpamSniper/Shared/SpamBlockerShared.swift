@@ -2,8 +2,6 @@
 //  SpamBlockerShared.swift
 //  SpamSniper
 //
-//  Created by Codex on 3/19/26.
-//
 
 import Foundation
 
@@ -20,6 +18,8 @@ enum SpamBlockerShared {
     private static let activeRepositoryIDKey = "spamBlocker.activeRepositoryID"
     private static let activeRepositoryURLKey = "spamBlocker.activeRepositoryURL"
     private static let trustedKeysKey = "spamBlocker.trustedKeys"
+    private static let protectionModeKey = "spamBlocker.protectionMode"
+    private static let syncDiagnosticsKey = "spamBlocker.syncDiagnostics"
 
     // swiftlint:disable:next unused_declaration
     static var blockedNumbers: [Int64] {
@@ -41,8 +41,41 @@ enum SpamBlockerShared {
 
     static func registerDefaults() {
         sharedDefaults.register(defaults: [
-            isEnabledKey: true
+            isEnabledKey: true,
+            protectionModeKey: ProtectionMode.block.rawValue
         ])
+    }
+
+    static var protectionMode: ProtectionMode {
+        get {
+            guard let rawValue = sharedDefaults.string(forKey: protectionModeKey),
+                  let mode = ProtectionMode(rawValue: rawValue) else {
+                return .block
+            }
+
+            return mode
+        }
+        set {
+            sharedDefaults.set(newValue.rawValue, forKey: protectionModeKey)
+        }
+    }
+
+    static var syncDiagnostics: SyncDiagnosticsSnapshot {
+        get {
+            guard let data = sharedDefaults.data(forKey: syncDiagnosticsKey),
+                  let snapshot = try? JSONDecoder().decode(SyncDiagnosticsSnapshot.self, from: data) else {
+                return SyncDiagnosticsSnapshot()
+            }
+
+            return snapshot
+        }
+        set {
+            if let data = try? JSONEncoder().encode(newValue) {
+                sharedDefaults.set(data, forKey: syncDiagnosticsKey)
+            } else {
+                sharedDefaults.removeObject(forKey: syncDiagnosticsKey)
+            }
+        }
     }
 
     static var customRepositoryURL: URL? {
