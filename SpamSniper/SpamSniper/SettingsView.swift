@@ -37,16 +37,9 @@ struct SettingsView: View {
 
     private var protectionModeSection: some View {
         Section {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 10) {
-                    protectionModeButton(.block)
-                    protectionModeButton(.labelOnly)
-                }
-
-                Text(model.protectionMode.detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 10) {
+                protectionModeButton(.block)
+                protectionModeButton(.labelOnly)
             }
             .padding(.vertical, 4)
         } header: {
@@ -119,8 +112,6 @@ struct SettingsView: View {
                     Label("Sync Diagnostics", systemImage: "stethoscope")
                     Spacer()
                     Text(diagnosticsBadgeText)
-                        .foregroundStyle(diagnosticsBadgeColor)
-                        .font(.subheadline.weight(.semibold))
                 }
             }
         } footer: {
@@ -137,15 +128,6 @@ struct SettingsView: View {
             return "Stale"
         case .neverSynced:
             return "Never"
-        }
-    }
-
-    private var diagnosticsBadgeColor: Color {
-        switch model.syncDiagnostics.health {
-        case .healthy:
-            return .green
-        case .stale, .neverSynced:
-            return .orange
         }
     }
 

@@ -150,7 +150,7 @@ extension ContentView {
         }
         .buttonStyle(.plain)
         .modifier(ContactAccessPickerModifier(isPresented: $isContactAccessPickerPresented) {
-            Task {
+            Task { @MainActor in
                 await model.refresh()
             }
         })

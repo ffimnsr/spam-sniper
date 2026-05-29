@@ -190,11 +190,19 @@ struct AppPalette {
 
 struct ContactAccessPickerModifier: ViewModifier {
     @Binding var isPresented: Bool
-    let onComplete: () -> Void
+    let onComplete: @MainActor () -> Void
     
     func body(content: Content) -> some View {
-        content.contactAccessPicker(isPresented: $isPresented) { _ in
-            onComplete()
-        }
+        content
+            .contactAccessPicker(isPresented: $isPresented)
+            .onChange(of: isPresented) { wasPresented, isNowPresented in
+                guard wasPresented, !isNowPresented else { return }
+
+                Task { @MainActor in
+                    // Refresh only after SwiftUI finishes dismissing the system picker.
+                    await Task.yield()
+                    onComplete()
+                }
+            }
     }
 }
