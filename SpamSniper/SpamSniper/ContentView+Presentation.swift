@@ -183,8 +183,10 @@ extension ContentView {
         switch model.contactsPermissionState {
         case .notDetermined:
             return "Contacts Protection"
-        case .authorized, .limited:
+        case .limited:
             return "Shared Contacts"
+        case .authorized:
+            return "Contacts Settings"
         case .denied, .restricted:
             return "Contacts Settings"
         }
@@ -194,9 +196,20 @@ extension ContentView {
         switch model.contactsPermissionState {
         case .notDetermined:
             return "person.crop.circle.badge.plus"
-        case .authorized, .limited:
+        case .limited:
             return "person.crop.circle.badge.checkmark"
+        case .authorized:
+            return "person.crop.circle"
         case .denied, .restricted:
+            return "arrow.up.right"
+        }
+    }
+
+    var contactsActionAccessory: String {
+        switch model.contactsPermissionState {
+        case .limited:
+            return "chevron.right"
+        case .notDetermined, .authorized, .denied, .restricted:
             return "arrow.up.right"
         }
     }
@@ -207,8 +220,10 @@ extension ContentView {
             Task {
                 await model.requestContactsAccess()
             }
-        case .authorized, .limited:
+        case .limited:
             isContactAccessPickerPresented = true
+        case .authorized:
+            model.openAppSettings()
         case .denied, .restricted:
             model.openAppSettings()
         }

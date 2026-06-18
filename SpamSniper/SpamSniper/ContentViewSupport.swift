@@ -145,7 +145,7 @@ extension ContentView {
                 title: contactsActionTitle,
                 detail: model.contactsStatusDescription,
                 tint: theme.tint,
-                accessory: "chevron.right"
+                accessory: contactsActionAccessory
             )
         }
         .buttonStyle(.plain)
