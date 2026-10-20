@@ -4,68 +4,52 @@ import {
   type AdminRemovalRequest,
   type AdminSummary,
   getAdminExport,
-  getAdminRemovalRequests,
-  getAdminSummary,
   loginAdmin,
   resolveAdminRemovalRequest,
 } from "../api/admin.ts";
 import { Button } from "../components/Button.tsx";
 import { Card, CardBody } from "../components/Card.tsx";
+import { CyberAlert } from "../components/CyberAlert.tsx";
+import { GlitchText } from "../components/GlitchText.tsx";
 import { Input } from "../components/Input.tsx";
 import { StatusBadge } from "../components/StatusBadge.tsx";
 import { TurnstileWidget } from "../components/TurnstileWidget.tsx";
+import { soundFx } from "../lib/sound-fx.ts";
 
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [resetKey, setResetKey] = useState(0);
   const [authenticated, setAuthenticated] = useState(false);
   const [summary, setSummary] = useState<AdminSummary | null>(null);
   const [requests, setRequests] = useState<AdminRemovalRequest[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState<unknown>(null);
+  const [error, setError] = useState<unknown>(null);
   const [exportData, setExportData] = useState<AdminExportEntry[] | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
-  const [exportError, setExportError] = useState("");
+  const [exportError, setExportError] = useState<unknown>(null);
   const [copySuccess, setCopySuccess] = useState(false);
-
-  const fetchData = async (pwd: string) => {
-    setLoading(true);
-    setError("");
-    try {
-      const [sumRes, reqRes] = await Promise.all([
-        getAdminSummary(pwd),
-        getAdminRemovalRequests(pwd),
-      ]);
-      setSummary(sumRes);
-      setRequests(Array.isArray(reqRes.requests) ? reqRes.requests : []);
-      setAuthenticated(true);
-    } catch (e) {
-      setError(String(e));
-      setSummary(null);
-      setRequests([]);
-      setAuthenticated(false);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
+    soundFx.scan();
+    setLoginLoading(true);
+    setLoginError(null);
+
     try {
       const res = await loginAdmin(password, turnstileToken);
+      soundFx.success();
       setSummary(res.summary);
-      setRequests(Array.isArray(res.requests) ? res.requests : []);
+      setRequests(res.requests);
       setAuthenticated(true);
-    } catch (e) {
-      setError(String(e));
-      setSummary(null);
-      setRequests([]);
-      setAuthenticated(false);
-    } finally {
+    } catch (err) {
+      soundFx.error();
+      setLoginError(err);
       setTurnstileToken("");
-      setLoading(false);
+      setResetKey((prev) => prev + 1);
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -73,108 +57,111 @@ export default function AdminPage() {
     id: number,
     action: "approve_removal" | "reject_removal" | "mark_disputed",
   ) => {
+    setError(null);
+    soundFx.scan();
     try {
       await resolveAdminRemovalRequest(id, { action }, password);
-      await fetchData(password);
-    } catch (e) {
-      setError(String(e));
+      soundFx.success();
+      setRequests((prev) => prev.filter((r) => r.id !== id));
+    } catch (err) {
+      soundFx.error();
+      setError(err);
     }
   };
 
   const handleExport = async () => {
     setExportLoading(true);
-    setExportError("");
-    setCopySuccess(false);
+    setExportError(null);
+    soundFx.scan();
     try {
       const res = await getAdminExport(password);
+      soundFx.success();
       setExportData(res.entries);
-    } catch (e) {
-      setExportError(String(e));
+    } catch (err) {
+      soundFx.error();
+      setExportError(err);
     } finally {
       setExportLoading(false);
     }
   };
 
-  const buildExportJson = () => {
-    if (!exportData) return "";
-    return JSON.stringify(
-      {
-        version: 1,
-        generated_at: new Date().toISOString(),
-        source: "SpamSniper Verified Spam Export",
-        notes: [
-          "Auto-generated export of all verified_spam entries from spam-triage.",
-          "phone_number_e164 values use stored E.164 numbers.",
-          "display_mask values are included for safe admin UI display.",
-        ],
-        total_entries: exportData.length,
-        entries: exportData,
-      },
-      null,
-      2,
-    );
-  };
-
   const handleCopyExport = async () => {
-    const json = buildExportJson();
-    if (!json) return;
+    if (!exportData) return;
+    soundFx.click();
     try {
-      await navigator.clipboard.writeText(json);
+      await navigator.clipboard.writeText(JSON.stringify(exportData, null, 2));
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch {
-      setExportError("Failed to copy to clipboard");
+      // fallback
     }
   };
 
   const handleDownloadExport = () => {
-    const json = buildExportJson();
-    if (!json) return;
-    const blob = new Blob([json], { type: "application/json" });
+    if (!exportData) return;
+    soundFx.click();
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `verified-spam-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `spam-blocklist-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   if (!authenticated) {
     return (
-      <div className="page-stack max-w-2xl">
+      <div className="page-stack max-w-lg mx-auto">
         <section className="page-hero">
-          <p className="page-eyebrow">Review Queue</p>
-          <h1 className="page-title">Review access.</h1>
-          <p className="page-lede">
-            Enter review password to open pending and contested removal cases.
+          <p className="page-eyebrow">RESTRICTED ACCESS // LEVEL 5 CLEARANCE</p>
+          <h1 className="page-title text-2xl sm:text-3xl">
+            <GlitchText text="OPERATOR COMMAND DECK." as="span" />
+          </h1>
+          <p className="page-lede text-sm">
+            Enter administrator cryptographic passkey to unlock system
+            telemetry, verified spam blocklist exports, and removal triage
+            resolution queues.
           </p>
         </section>
-        <Card>
+
+        <Card className="border-cyan-500/40 shadow-[0_0_25px_rgba(0,240,255,0.1)]">
           <CardBody className="space-y-4">
             <form onSubmit={handleLogin} className="space-y-4">
               <Input
-                label="Password"
+                label="Operator Access Key"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter review password"
+                placeholder="••••••••••••••••"
+                required
               />
+
               <div className="space-y-2">
                 <TurnstileWidget
-                  onVerify={setTurnstileToken}
+                  resetKey={resetKey}
+                  onVerify={(token) => setTurnstileToken(token)}
                   onError={() => setTurnstileToken("")}
                 />
-                {!turnstileToken && error.startsWith("VALIDATION_ERROR") && (
-                  <p className="text-sm text-red-600">
-                    Please complete the Turnstile challenge.
-                  </p>
-                )}
               </div>
-              <Button type="submit" loading={loading}>
-                Unlock
+
+              <Button
+                type="submit"
+                loading={loginLoading}
+                disabled={!turnstileToken || !password}
+                className="w-full"
+              >
+                Unlock Command Deck
               </Button>
             </form>
-            {error && <p className="text-red-600">{error}</p>}
+
+            {Boolean(loginError) && (
+              <CyberAlert
+                error={loginError}
+                onDismiss={() => setLoginError(null)}
+              />
+            )}
           </CardBody>
         </Card>
       </div>
@@ -183,77 +170,109 @@ export default function AdminPage() {
 
   return (
     <div className="page-stack">
+      {/* Header */}
       <section className="page-hero">
-        <p className="page-eyebrow">Review Queue</p>
-        <h1 className="page-title">Admin dashboard.</h1>
+        <div className="flex items-center justify-between">
+          <p className="page-eyebrow">COMMAND DECK // SYSTEM OVERSEER</p>
+          <span className="font-mono text-xs text-[#00ff9d] bg-emerald-950/40 border border-[#00ff9d]/30 px-2 py-0.5 rounded-xs">
+            CLEARANCE: OPERATOR
+          </span>
+        </div>
+        <h1 className="page-title">
+          <GlitchText text="TRIAGE CONSOLE." as="span" />
+        </h1>
         <p className="page-lede">
-          Moderation summary plus contested or open removals waiting for manual
-          resolution.
+          System telemetry counters, verified spam blocklist exports, and active
+          removal disputes awaiting operator adjudication.
         </p>
       </section>
 
+      {/* Summary Stat Gauges */}
       {summary && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Card>
-            <CardBody>
-              <p className="text-sm text-slate-500">Total Numbers</p>
-              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 font-mono">
+          <Card className="border-cyan-500/30">
+            <CardBody className="space-y-1">
+              <span className="text-xs uppercase text-slate-400">
+                Total Numbers
+              </span>
+              <p className="text-3xl font-bold font-orbitron text-cyan-300">
                 {summary.totalNumbers}
               </p>
             </CardBody>
           </Card>
-          <Card>
-            <CardBody>
-              <p className="text-sm text-slate-500">Pending</p>
-              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+
+          <Card className="border-cyan-500/30">
+            <CardBody className="space-y-1">
+              <span className="text-xs uppercase text-slate-400">
+                Pending Review
+              </span>
+              <p className="text-3xl font-bold font-orbitron text-cyan-400">
                 {summary.pending}
               </p>
             </CardBody>
           </Card>
-          <Card>
-            <CardBody>
-              <p className="text-sm text-slate-500">Suspected</p>
-              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+
+          <Card className="border-amber-500/30">
+            <CardBody className="space-y-1">
+              <span className="text-xs uppercase text-slate-400">
+                Suspected Spam
+              </span>
+              <p className="text-3xl font-bold font-orbitron text-amber-400">
                 {summary.suspected}
               </p>
             </CardBody>
           </Card>
-          <Card>
-            <CardBody>
-              <p className="text-sm text-slate-500">Verified Spam</p>
-              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+
+          <Card className="border-[#ff0055]/40">
+            <CardBody className="space-y-1">
+              <span className="text-xs uppercase text-slate-400">
+                Verified Spam
+              </span>
+              <p className="text-3xl font-bold font-orbitron text-[#ff0055]">
                 {summary.verifiedSpam}
               </p>
             </CardBody>
           </Card>
-          <Card>
-            <CardBody>
-              <p className="text-sm text-slate-500">Under Review</p>
-              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+
+          <Card className="border-purple-500/30">
+            <CardBody className="space-y-1">
+              <span className="text-xs uppercase text-slate-400">
+                Under Delist Review
+              </span>
+              <p className="text-3xl font-bold font-orbitron text-purple-400">
                 {summary.underRemovalReview}
               </p>
             </CardBody>
           </Card>
-          <Card>
-            <CardBody>
-              <p className="text-sm text-slate-500">Disputed</p>
-              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+
+          <Card className="border-yellow-500/30">
+            <CardBody className="space-y-1">
+              <span className="text-xs uppercase text-slate-400">
+                Contested / Disputed
+              </span>
+              <p className="text-3xl font-bold font-orbitron text-yellow-400">
                 {summary.disputed}
               </p>
             </CardBody>
           </Card>
-          <Card>
-            <CardBody>
-              <p className="text-sm text-slate-500">Removed</p>
-              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+
+          <Card className="border-slate-700">
+            <CardBody className="space-y-1">
+              <span className="text-xs uppercase text-slate-400">
+                Purged / Removed
+              </span>
+              <p className="text-3xl font-bold font-orbitron text-slate-400">
                 {summary.removed}
               </p>
             </CardBody>
           </Card>
-          <Card>
-            <CardBody>
-              <p className="text-sm text-slate-500">Open Requests</p>
-              <p className="text-3xl font-semibold tracking-[-0.05em] text-slate-950">
+
+          <Card className="border-amber-500/40">
+            <CardBody className="space-y-1">
+              <span className="text-xs uppercase text-slate-400">
+                Open Removal Cases
+              </span>
+              <p className="text-3xl font-bold font-orbitron text-amber-300">
                 {summary.openRemovalRequests}
               </p>
             </CardBody>
@@ -261,115 +280,185 @@ export default function AdminPage() {
         </div>
       )}
 
-      <Card className="max-w-5xl">
+      {/* Verified Spam Export Console */}
+      <Card className="max-w-5xl border-cyan-500/30">
         <CardBody className="space-y-4">
-          <div className="space-y-2">
-            <p className="page-eyebrow">Export</p>
-            <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-              Verified spam export.
-            </h2>
-            <p className="text-slate-600">
-              Export all verified spam entries as JSON, matching the
-              community-core blocklist format.
-            </p>
-            <p className="text-sm text-slate-500">
-              Preview below stays masked. Copied and downloaded JSON includes
-              full E.164 values.
-            </p>
+          <div className="flex items-center justify-between border-b border-cyan-500/20 pb-3">
+            <div>
+              <p className="page-eyebrow">TELEMETRY SYNC // BLOCKLIST EXPORT</p>
+              <h2 className="text-xl font-bold font-orbitron text-white mt-1">
+                Verified Spam Blocklist.
+              </h2>
+            </div>
+            <span className="font-mono text-xs text-cyan-400">
+              FORMAT: E.164 JSON
+            </span>
           </div>
-          {exportError && <p className="text-red-600">{exportError}</p>}
-          <div className="flex flex-wrap gap-2">
-            <Button loading={exportLoading} onClick={handleExport}>
-              {exportData ? "Refresh" : "Load export data"}
+
+          <p className="font-mono text-xs text-slate-300">
+            Export all verified spam entries formatted for the Spam Sniper
+            community-core engine. Preview below keeps masks intact; JSON output
+            contains decrypted E.164 strings.
+          </p>
+
+          {Boolean(exportError) && (
+            <CyberAlert
+              error={exportError}
+              onDismiss={() => setExportError(null)}
+            />
+          )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="primary"
+              loading={exportLoading}
+              onClick={handleExport}
+              className="text-xs !py-2.5"
+            >
+              {exportData ? "Refresh Telemetry Ledger" : "Load Blocklist Data"}
             </Button>
+
             {exportData && (
               <>
-                <Button variant="secondary" onClick={handleCopyExport}>
-                  {copySuccess ? "Copied!" : "Copy JSON"}
+                <Button
+                  variant="secondary"
+                  onClick={handleCopyExport}
+                  className="text-xs !py-2.5"
+                >
+                  {copySuccess ? "Copied to Clipboard!" : "Copy Full JSON"}
                 </Button>
-                <Button variant="secondary" onClick={handleDownloadExport}>
-                  Download .json
+                <Button
+                  variant="secondary"
+                  onClick={handleDownloadExport}
+                  className="text-xs !py-2.5"
+                >
+                  Download .json file
                 </Button>
-                <p className="self-center text-sm text-slate-500">
-                  {exportData.length} entries
-                </p>
+                <span className="font-mono text-xs text-cyan-400">
+                  [{exportData.length} entries compiled]
+                </span>
               </>
             )}
           </div>
+
           {exportData && (
-            <div className="max-h-96 space-y-2 overflow-auto rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              {exportData.map((entry) => (
-                <div
-                  key={`${entry.phone_number_e164}-${entry.category}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2"
-                >
-                  <div>
-                    <p className="font-medium text-slate-950">
-                      {entry.display_mask}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {entry.category} · {entry.confidence} confidence
-                    </p>
+            <div className="max-h-96 space-y-2 overflow-auto rounded-sm border border-cyan-500/20 bg-[#060a16] p-3 font-mono text-xs text-slate-200">
+              {exportData.length === 0 ? (
+                <p className="text-slate-500">
+                  No verified spam entries in active dataset.
+                </p>
+              ) : (
+                exportData.map((entry) => (
+                  <div
+                    key={`${entry.phone_number_e164}-${entry.category}`}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xs border border-cyan-500/15 bg-[#090f1e] px-3 py-2 hover:border-cyan-400/40 transition-colors"
+                  >
+                    <div>
+                      <p className="font-bold text-white tracking-wider">
+                        {entry.display_mask}
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Category:{" "}
+                        <span className="text-cyan-300">{entry.category}</span>{" "}
+                        · Confidence: {entry.confidence}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[11px] text-[#00ff9d]">
+                        {entry.unique_reporter_count} Unique Nodes
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    {entry.unique_reporter_count} unique reporters
-                  </p>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           )}
         </CardBody>
       </Card>
 
-      <Card className="max-w-5xl">
+      {/* Manual Adjudication Queue */}
+      <Card className="max-w-5xl border-cyan-500/30">
         <CardBody className="space-y-4">
-          <div className="space-y-2">
-            <p className="page-eyebrow">Manual Actions</p>
-            <h2 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-              Open and contested removals.
-            </h2>
+          <div className="flex items-center justify-between border-b border-cyan-500/20 pb-3">
+            <div>
+              <p className="page-eyebrow">
+                TRIAGE QUEUE // OPERATOR DISPOSITION
+              </p>
+              <h2 className="text-xl font-bold font-orbitron text-white mt-1">
+                Contested & Open Removals.
+              </h2>
+            </div>
+            <span className="font-mono text-xs text-amber-400">
+              [{requests.length} cases awaiting resolution]
+            </span>
           </div>
-          {error && <p className="text-red-600">{error}</p>}
+
+          {Boolean(error) && (
+            <CyberAlert error={error} onDismiss={() => setError(null)} />
+          )}
+
           {requests.length === 0 ? (
-            <p className="text-slate-600">No open or contested requests.</p>
+            <p className="font-mono text-xs text-slate-400 py-4">
+              [ALL_CLEAR] No open or contested removal requests in queue.
+            </p>
           ) : (
             <div className="space-y-3">
               {requests.map((req) => (
-                <Card key={req.id}>
-                  <CardBody>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-slate-950">
+                <div
+                  key={req.id}
+                  className="rounded-sm border border-cyan-500/20 bg-[#060a16] p-4 space-y-3 font-mono text-xs"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-500/10 pb-2">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-white tracking-wider">
                         {req.display_mask}
                       </span>
                       <StatusBadge status={req.status} />
                     </div>
-                    <p className="mt-2 text-sm text-slate-600">
-                      Reason: {req.reason} · Contests: {req.contest_count} ·
-                      Deadline:{" "}
-                      {new Date(req.contest_deadline).toLocaleDateString()}
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Button
-                        variant="secondary"
-                        onClick={() => handleResolve(req.id, "approve_removal")}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => handleResolve(req.id, "reject_removal")}
-                      >
-                        Reject
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => handleResolve(req.id, "mark_disputed")}
-                      >
-                        Mark disputed
-                      </Button>
+                    <span className="text-slate-500">CASE #{req.id}</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-slate-300">
+                    <div>
+                      <span className="text-slate-500">Reason:</span>{" "}
+                      {req.reason}
                     </div>
-                  </CardBody>
-                </Card>
+                    <div>
+                      <span className="text-slate-500">Contest Count:</span>{" "}
+                      <span className="text-amber-400 font-bold">
+                        {req.contest_count}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Deadline:</span>{" "}
+                      {new Date(req.contest_deadline).toLocaleDateString()}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    <Button
+                      variant="primary"
+                      onClick={() => handleResolve(req.id, "approve_removal")}
+                      className="text-xs !py-1.5 !px-3"
+                    >
+                      Approve Removal (Delist)
+                    </Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => handleResolve(req.id, "reject_removal")}
+                      className="text-xs !py-1.5 !px-3"
+                    >
+                      Reject Removal (Maintain Block)
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleResolve(req.id, "mark_disputed")}
+                      className="text-xs !py-1.5 !px-3"
+                    >
+                      Mark Disputed (Freeze)
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
           )}

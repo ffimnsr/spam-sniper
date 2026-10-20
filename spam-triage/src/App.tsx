@@ -1,5 +1,16 @@
-import { BrowserRouter, Link, Navigate, Route, Routes } from "react-router-dom";
+import {
+  BrowserRouter,
+  Link,
+  Navigate,
+  NavLink,
+  Route,
+  Routes,
+} from "react-router-dom";
+import { CyberReticle } from "./components/CyberReticle.tsx";
+import { SoundToggle } from "./components/SoundToggle.tsx";
+import { TerminalTicker } from "./components/TerminalTicker.tsx";
 import { hiddenAdminRoute } from "./lib/admin-path.ts";
+import { soundFx } from "./lib/sound-fx.ts";
 import AdminPage from "./pages/AdminPage.tsx";
 import CheckPage from "./pages/CheckPage.tsx";
 import HomePage from "./pages/HomePage.tsx";
@@ -12,28 +23,80 @@ export default function App() {
   return (
     <BrowserRouter>
       <div className="app-shell">
+        {/* Subtle retro-futuristic CRT scanlines */}
+        <div className="app-shell__scanline" />
+
+        {/* Sweeping Radar Scanner Line */}
+        <div className="app-shell__sweeper" />
+
+        {/* Ambient neon nebula orbs */}
         <div className="app-shell__glow app-shell__glow--left" />
         <div className="app-shell__glow app-shell__glow--right" />
+
+        {/* Live System Timestamp & Telemetry Banner */}
+        <TerminalTicker />
+
+        {/* Top HUD Bar */}
         <header className="app-topbar">
-          <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-4">
-            <Link to="/" className="app-brand">
-              <span className="app-brand__eyebrow">Community Shield</span>
-              <span className="app-brand__name">Spam Sniper</span>
+          <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
+            <Link
+              to="/"
+              className="app-brand group"
+              onMouseEnter={() => soundFx.hover()}
+            >
+              <div className="relative flex items-center justify-center p-2 rounded-sm border border-cyan-500/30 bg-[#070e1c] group-hover:border-cyan-400 group-hover:shadow-[0_0_15px_rgba(0,240,255,0.4)] transition-all">
+                <CyberReticle size={26} className="text-cyan-400" />
+              </div>
+              <div className="app-brand__text">
+                <span className="app-brand__eyebrow">
+                  NEURAL DEFENSE // PROTOCOL
+                </span>
+                <span className="app-brand__name">
+                  SPAM<span className="text-cyan-400">SNIPER</span>
+                </span>
+              </div>
             </Link>
-            <nav className="app-nav">
-              <Link to="/check" className="app-nav__link">
-                Check
-              </Link>
-              <Link to="/report" className="app-nav__link">
-                Report
-              </Link>
-              <Link to="/remove" className="app-nav__link">
-                Remove
-              </Link>
-            </nav>
+
+            {/* Audio Toggle & Quick Status */}
+            <div className="flex items-center gap-3">
+              <SoundToggle />
+
+              {/* Navigation Tabs */}
+              <nav className="app-nav">
+                <NavLink
+                  to="/check"
+                  onMouseEnter={() => soundFx.hover()}
+                  className={({ isActive }) =>
+                    `app-nav__link ${isActive ? "active" : ""}`
+                  }
+                >
+                  [ Check ]
+                </NavLink>
+                <NavLink
+                  to="/report"
+                  onMouseEnter={() => soundFx.hover()}
+                  className={({ isActive }) =>
+                    `app-nav__link ${isActive ? "active" : ""}`
+                  }
+                >
+                  [ Report ]
+                </NavLink>
+                <NavLink
+                  to="/remove"
+                  onMouseEnter={() => soundFx.hover()}
+                  className={({ isActive }) =>
+                    `app-nav__link ${isActive ? "active" : ""}`
+                  }
+                >
+                  [ Remove ]
+                </NavLink>
+              </nav>
+            </div>
           </div>
         </header>
-        <main className="mx-auto flex w-full max-w-6xl flex-1 px-4 py-8">
+
+        {/* Main Content Area */}
+        <main className="mx-auto flex w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
           <section className="app-panel">
             <Routes>
               <Route path="/" element={<HomePage />} />
@@ -47,23 +110,46 @@ export default function App() {
             </Routes>
           </section>
         </main>
+
+        {/* Cyberpunk Tactical Footer */}
         <footer className="app-footer">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-5 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <span className="font-semibold text-slate-900">Spam Sniper</span>
-              <span className="ml-2">
-                Privacy-first. No accounts, no tracking, no analytics.
-              </span>
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 font-mono text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="font-bold tracking-wider text-slate-200">
+                  SPAM SNIPER // TRIAGE
+                </span>
+                <span className="rounded-xs border border-cyan-500/30 px-1 text-[10px] text-cyan-400">
+                  v2.4.0-CYBER
+                </span>
+              </div>
+              <p className="text-slate-500 text-[11px]">
+                Cryptographic zero-knowledge lookup. No accounts, no IP
+                tracking, no persistent telemetry.
+              </p>
             </div>
-            <div className="flex gap-4">
-              <Link to="/check" className="hover:text-slate-900">
-                Lookup
+
+            <div className="flex flex-wrap items-center gap-4 text-xs">
+              <Link
+                to="/check"
+                onMouseEnter={() => soundFx.hover()}
+                className="text-slate-400 hover:text-cyan-300 transition-colors"
+              >
+                // SCAN_TARGET
               </Link>
-              <Link to="/report" className="hover:text-slate-900">
-                Reports
+              <Link
+                to="/report"
+                onMouseEnter={() => soundFx.hover()}
+                className="text-slate-400 hover:text-[#ff0055] transition-colors"
+              >
+                // TRANSMIT_SIGNAL
               </Link>
-              <Link to="/remove" className="hover:text-slate-900">
-                Removal
+              <Link
+                to="/remove"
+                onMouseEnter={() => soundFx.hover()}
+                className="text-slate-400 hover:text-amber-300 transition-colors"
+              >
+                // CONTEST_RECORD
               </Link>
             </div>
           </div>

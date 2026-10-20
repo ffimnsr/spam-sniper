@@ -1,12 +1,13 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { soundFx } from "../lib/sound-fx.ts";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary";
+  variant?: "primary" | "secondary" | "danger" | "ghost";
   loading?: boolean;
 }
 
@@ -14,27 +15,48 @@ export function Button({
   children,
   variant = "primary",
   loading = false,
-  disabled,
   className,
+  disabled,
+  onClick,
+  onMouseEnter,
   ...props
 }: ButtonProps) {
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    soundFx.click();
+    onClick?.(e);
+  };
+
+  const handleMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
+    soundFx.hover();
+    onMouseEnter?.(e);
+  };
+
   return (
     <button
-      type="button"
       disabled={disabled || loading}
+      onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
       className={cn(
-        "inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold tracking-[0.01em] transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50",
+        "group relative inline-flex items-center justify-center px-5 py-3 text-sm font-bold tracking-wider uppercase transition-all duration-200 outline-none select-none disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer",
         variant === "primary" &&
-          "bg-gradient-to-b from-[#79bcff] to-[#2d89ff] text-white shadow-[0_16px_30px_rgba(45,137,255,0.24)] hover:translate-y-[-1px] hover:from-[#87c3ff] hover:to-[#1f79ef] focus:ring-blue-500",
+          "bg-[#00f0ff] text-[#050811] shadow-[0_0_20px_rgba(0,240,255,0.35)] hover:bg-[#4df4ff] hover:shadow-[0_0_30px_rgba(0,240,255,0.65)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99]",
         variant === "secondary" &&
-          "border border-[rgba(150,178,212,0.54)] bg-[linear-gradient(180deg,rgba(255,255,255,0.74)_0%,rgba(255,255,255,0.44)_100%)] text-slate-700 shadow-[0_12px_24px_rgba(92,132,184,0.10)] hover:translate-y-[-1px] hover:text-slate-900 focus:ring-slate-500",
+          "border border-cyan-500/40 bg-[#091122]/80 text-cyan-300 shadow-[0_0_12px_rgba(0,240,255,0.12)] hover:border-cyan-300 hover:bg-cyan-950/40 hover:text-cyan-100 hover:shadow-[0_0_20px_rgba(0,240,255,0.3)] hover:-translate-y-0.5 active:translate-y-0",
+        variant === "danger" &&
+          "border border-[#ff0055]/50 bg-[#250814]/80 text-[#ff3377] shadow-[0_0_15px_rgba(255,0,85,0.2)] hover:border-[#ff0055] hover:bg-[#ff0055]/20 hover:text-white hover:shadow-[0_0_25px_rgba(255,0,85,0.5)] hover:-translate-y-0.5 active:translate-y-0",
+        variant === "ghost" &&
+          "text-slate-400 hover:text-cyan-300 hover:bg-cyan-950/20",
         className,
       )}
+      style={{
+        clipPath:
+          "polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))",
+      }}
       {...props}
     >
-      {loading && (
+      {loading ? (
         <svg
-          className="mr-2 h-4 w-4 animate-spin"
+          className="mr-2 h-4 w-4 animate-spin text-current"
           viewBox="0 0 24 24"
           fill="none"
         >
@@ -47,13 +69,15 @@ export function Button({
             strokeWidth="4"
           />
           <path
-            className="opacity-75"
+            className="opacity-90"
             fill="currentColor"
             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
           />
         </svg>
-      )}
-      {children}
+      ) : null}
+      <span className="relative z-10 flex items-center gap-1.5 font-rajdhani text-sm font-bold tracking-widest">
+        {children}
+      </span>
     </button>
   );
 }
