@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.vite
 *.local
 
 # Editor directories and files
@@ -30,4 +31,6 @@ dist-ssr
 *.sqlite
 *.sqlite3
 .env
-wrangler.jsonc
+.env.production
+# wrangler.jsonc is committed: it holds only non-secret bindings, vars, and
+# rate limits — never put secrets in it.

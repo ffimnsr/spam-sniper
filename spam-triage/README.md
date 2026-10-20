@@ -20,11 +20,12 @@ Vite + React + TypeScript app with React Compiler enabled.
 
 ## Admin Route
 
-- Set `VITE_HIDDEN_ADMIN_PATH` in `.env` for frontend route.
+- Set `VITE_HIDDEN_ADMIN_PATH` in `.env` for local frontend route; production builds read it from the build environment (or `.env` when present).
 - Optional: set `VITE_API_PROXY_TARGET` in `.env` if Worker dev server is not on `http://127.0.0.1:8787`.
-- Set `VITE_TURNSTILE_SITE_KEY` in `.env`; lookup and admin login now both require Turnstile.
-- Set `HIDDEN_ADMIN_PATH` in Worker env or `.dev.vars` for backend route.
+- Set `VITE_TURNSTILE_SITE_KEY` in `.env`; lookup and admin login now require Turnstile. Production builds read it from the build environment.
+- Set `HIDDEN_ADMIN_PATH` in Worker env (`wrangler.jsonc`) or `.dev.vars` for backend route.
 - `shared/admin-paths.ts` derives matching API paths from those env values.
+- The admin path is obfuscation, not a secret: `VITE_*` values are inlined into the public JS bundle.
 - Admin login returns a signed 12-hour session token; the password is only sent to the login endpoint.
 - Removal request URLs use an unguessable public token, not the numeric row ID.
 - Public navigation does not expose admin entry.
@@ -48,6 +49,28 @@ Vite + React + TypeScript app with React Compiler enabled.
 - Set `ENVIRONMENT=development` in `.dev.vars` when using Cloudflare test keys; Turnstile action/hostname checks are skipped in that mode.
 
 ## Deploy
+
+### Git-connected builds (Cloudflare Workers Builds)
+
+- Project root directory: `spam-triage`.
+- Build command: `npm run build`.
+- Deploy command: `npm run deploy` (applies remote D1 migrations, then `wrangler deploy`).
+- `wrangler.jsonc` is committed, so Wrangler does not run its interactive setup during builds. It contains only non-secret values; keep secrets in Worker secrets.
+- Add these **build** variables in the Cloudflare project settings (Build → Variables and secrets). They are inlined at build time; Worker runtime vars do not reach the bundle:
+
+| Name | Value |
+| --- | --- |
+| `VITE_TURNSTILE_SITE_KEY` | Turnstile site key (public) |
+| `VITE_HIDDEN_ADMIN_PATH` | same value as `HIDDEN_ADMIN_PATH` in `wrangler.jsonc` |
+
+- `npm run build` fails when either build variable is missing, so a misconfigured deploy cannot ship a blank app.
+- If the build token cannot apply migrations, set the deploy command to `npx wrangler deploy` and apply migrations manually:
+
+```bash
+npx wrangler d1 migrations apply DB --remote
+```
+
+### Manual deploy
 
 - Run `npm run deploy` for default environment.
 - Run `npm run deploy -- --env <name>` for named Wrangler environment.
