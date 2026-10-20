@@ -18,15 +18,14 @@ describe("normalizePhone", () => {
     });
   });
 
-  it.each([
-    "12345",
-    "abcde",
-    "",
-  ])("rejects invalid phone input: %p", (input) => {
-    expect(() => normalizePhone(input, "PH")).toThrowError(
-      "INVALID_PHONE_NUMBER",
-    );
-  });
+  it.each(["12345", "abcde", ""])(
+    "rejects invalid phone input: %p",
+    (input) => {
+      expect(() => normalizePhone(input, "PH")).toThrowError(
+        "INVALID_PHONE_NUMBER",
+      );
+    },
+  );
 
   it("accepts number with spaces and dashes", () => {
     expect(normalizePhone("+63 917-123-4567", "PH")).toMatchObject({

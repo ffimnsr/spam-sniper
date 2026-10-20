@@ -1,7 +1,15 @@
 {
   "name": "spam-triage",
   "main": "worker/index.ts",
-  "compatibility_date": "2025-05-28",
+  "compatibility_date": "2026-10-01",
+  "routes": [
+    {
+      "pattern": "spam-sniper-triage.vastorigins.com",
+      "custom_domain": true,
+      "enabled": true,
+      "previews_enabled": false
+    }
+  ],
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
