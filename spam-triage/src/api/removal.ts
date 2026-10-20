@@ -9,7 +9,7 @@ export interface CreateRemovalRequestBody {
 
 export interface CreateRemovalRequestResponse {
   ok: true;
-  removalRequestId: number;
+  publicToken: string;
   maskedNumber: string;
   contestDeadline: string;
 }
@@ -20,7 +20,6 @@ export function createRemovalRequest(body: CreateRemovalRequestBody) {
 
 export interface RemovalRequestDetail {
   ok: true;
-  removalRequestId: number;
   maskedNumber: string;
   reason: string;
   status: string;
@@ -29,8 +28,10 @@ export interface RemovalRequestDetail {
   contestWindowOpen: boolean;
 }
 
-export function getRemovalRequest(id: number) {
-  return apiGet<RemovalRequestDetail>(`/api/removal-requests/${id}`);
+export function getRemovalRequest(publicToken: string) {
+  return apiGet<RemovalRequestDetail>(
+    `/api/removal-requests/${encodeURIComponent(publicToken)}`,
+  );
 }
 
 export interface ContestBody {
@@ -44,6 +45,9 @@ export interface ContestResponse {
   status: string;
 }
 
-export function contestRemovalRequest(id: number, body: ContestBody) {
-  return apiPost<ContestResponse>(`/api/removal-requests/${id}/contest`, body);
+export function contestRemovalRequest(publicToken: string, body: ContestBody) {
+  return apiPost<ContestResponse>(
+    `/api/removal-requests/${encodeURIComponent(publicToken)}/contest`,
+    body,
+  );
 }

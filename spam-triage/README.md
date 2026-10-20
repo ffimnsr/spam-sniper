@@ -25,19 +25,34 @@ Vite + React + TypeScript app with React Compiler enabled.
 - Set `VITE_TURNSTILE_SITE_KEY` in `.env`; lookup and admin login now both require Turnstile.
 - Set `HIDDEN_ADMIN_PATH` in Worker env or `.dev.vars` for backend route.
 - `shared/admin-paths.ts` derives matching API paths from those env values.
+- Admin login returns a signed 12-hour session token; the password is only sent to the login endpoint.
+- Removal request URLs use an unguessable public token, not the numeric row ID.
 - Public navigation does not expose admin entry.
+
+## Data at Rest
+
+- E.164 values are encrypted with AES-GCM; the key is derived from `HASH_SECRET`.
+- `phone_number_e164` is written as `NULL` for new rows. The daily cron encrypts legacy plaintext rows in batches of 100.
+- Admin exports decrypt values in memory only.
+
+## Abuse Controls
+
+- All public writes and admin login are Turnstile-protected, bound to a Turnstile action, and checked against the request hostname.
+- `wrangler.jsonc` defines a `RATE_LIMITER` binding (60 requests / 60 seconds per IP and scope). The Worker skips limiting when the binding is absent, so local dev and tests are unaffected.
 
 ## Local Dev
 
 - Run `npm run dev:worker` in one terminal.
 - Run `npm run dev` in another terminal.
 - Keep `VITE_HIDDEN_ADMIN_PATH` and `HIDDEN_ADMIN_PATH` identical.
+- Set `ENVIRONMENT=development` in `.dev.vars` when using Cloudflare test keys; Turnstile action/hostname checks are skipped in that mode.
 
 ## Deploy
 
 - Run `npm run deploy` for default environment.
 - Run `npm run deploy -- --env <name>` for named Wrangler environment.
 - Run `npm run deploy -- --skip-migrations` only if remote schema already current.
+- Migration `0004` keeps the oldest open removal request per number and rejects duplicates before adding the unique index.
 - Set Worker secrets before first deploy with `npx wrangler secret put`:
 
 ```bash

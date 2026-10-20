@@ -29,6 +29,8 @@ const contestReasons = [
   { value: "other", label: "Other - Additional evidence available" },
 ];
 
+const PUBLIC_TOKEN_RE = /^[0-9a-f]{32}$/;
+
 const schema = z.object({
   reason: z.string().min(1, "Contest reason is required"),
   turnstileToken: z.string().min(1, "Turnstile verification required"),
@@ -37,8 +39,8 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 export default function RemovalDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const removalId = Number(id);
+  const { token } = useParams<{ token: string }>();
+  const publicToken = token && PUBLIC_TOKEN_RE.test(token) ? token : null;
 
   const [resetKey, setResetKey] = useState(0);
 
@@ -76,17 +78,12 @@ export default function RemovalDetailPage() {
 
   const selectedReason = watch("reason");
 
-  const loadDetail = useCallback(async (targetId: number) => {
-    if (!Number.isFinite(targetId)) {
-      setDetail(null);
-      return;
-    }
-
+  const loadDetail = useCallback(async (targetToken: string) => {
     setLoadingDetail(true);
     setDetailError(null);
 
     try {
-      const res = await getRemovalRequest(targetId);
+      const res = await getRemovalRequest(targetToken);
       setDetail({
         maskedNumber: res.maskedNumber,
         reason: res.reason,
@@ -103,23 +100,23 @@ export default function RemovalDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (!Number.isFinite(removalId)) {
+    if (!publicToken) {
       setDetail(null);
       return;
     }
 
-    void loadDetail(removalId);
-  }, [removalId, loadDetail]);
+    void loadDetail(publicToken);
+  }, [publicToken, loadDetail]);
 
   const onSubmit = async (data: FormData) => {
-    if (!Number.isFinite(removalId)) return;
+    if (!publicToken) return;
     soundFx.scan();
     setContestLoading(true);
     setContestError(null);
     setContestResult(null);
 
     try {
-      const res = await contestRemovalRequest(removalId, {
+      const res = await contestRemovalRequest(publicToken, {
         reason: data.reason,
         turnstileToken: data.turnstileToken,
       });
@@ -132,7 +129,7 @@ export default function RemovalDetailPage() {
       });
 
       reset({ reason: "still_spam", turnstileToken: "" });
-      await loadDetail(removalId);
+      await loadDetail(publicToken);
     } catch (e) {
       soundFx.error();
       setContestError(e);
@@ -150,7 +147,7 @@ export default function RemovalDetailPage() {
         <div className="flex items-center justify-between">
           <p className="page-eyebrow">CASE AUDIT // REMOVAL TELEMETRY</p>
           <span className="font-mono text-xs text-cyan-400 bg-cyan-950/40 border border-cyan-500/30 px-2 py-0.5 rounded-xs">
-            CASE_ID: #{removalId}
+            CASE_ID: #{publicToken?.slice(0, 8) ?? "INVALID"}
           </span>
         </div>
         <h1 className="page-title">
@@ -183,8 +180,7 @@ export default function RemovalDetailPage() {
         <Card className="max-w-2xl">
           <CardBody className="space-y-3 font-mono text-sm">
             <p className="text-slate-400">
-              [NOT_FOUND] No active removal docket registered for ID #
-              {removalId}.
+              [NOT_FOUND] No active removal docket registered for this case.
             </p>
             <Link to="/remove">
               <Button variant="secondary" className="text-xs !py-2">
@@ -285,6 +281,7 @@ export default function RemovalDetailPage() {
               <div className="space-y-2">
                 <TurnstileWidget
                   resetKey={resetKey}
+                  action="removal_contest"
                   onVerify={(token) => setValue("turnstileToken", token)}
                   onError={() => setValue("turnstileToken", "")}
                 />

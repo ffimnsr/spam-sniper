@@ -1,5 +1,5 @@
-function normalizePathSegment(path: string, label: string) {
-  const trimmed = path.trim();
+function normalizePathSegment(path: string | undefined, label: string) {
+  const trimmed = (path ?? "").trim();
 
   if (!trimmed) {
     throw new Error(`${label} is required.`);
@@ -10,6 +10,11 @@ function normalizePathSegment(path: string, label: string) {
 
   if (withoutTrailingSlash === "/") {
     throw new Error(`${label} must not resolve to root path.`);
+  }
+
+  // Keep the value safe to embed in route strings and regexes downstream.
+  if (!/^[A-Za-z0-9/_-]+$/.test(withoutTrailingSlash)) {
+    throw new Error(`${label} contains unsupported characters.`);
   }
 
   return withoutTrailingSlash;

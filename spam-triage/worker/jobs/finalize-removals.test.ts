@@ -51,19 +51,26 @@ class MockStatement {
   }
 
   async run() {
-    if (
-      this.sql.startsWith(
-        "UPDATE removal_requests SET status = ?, updated_at = ? WHERE id = ?",
-      )
-    ) {
+    if (this.sql.includes("UPDATE removal_requests SET status = ?")) {
       const newStatus = String(this.params[0]);
       const id = Number(this.params[2]);
       const rr = this.state.removalRequests.find((r) => r.id === id);
-      if (rr) {
+      const hasContests = this.state.contests.some(
+        (c) => c.removalRequestId === id,
+      );
+      const wantsApproved = this.sql.includes("NOT EXISTS");
+      const wantsContested = this.sql.includes("EXISTS") && !wantsApproved;
+      const eligible =
+        rr?.status === "open" &&
+        ((wantsApproved && !hasContests) || (wantsContested && hasContests));
+
+      if (rr && eligible) {
         rr.status = newStatus;
         rr.updated_at = String(this.params[1]);
+        return { meta: { changes: 1 } };
       }
-      return { meta: {} };
+
+      return { meta: { changes: 0 } };
     }
 
     if (
@@ -123,6 +130,14 @@ class MockDb {
 
   prepare(sql: string) {
     return new MockStatement(sql, this.state);
+  }
+
+  async batch(statements: MockStatement[]) {
+    const results = [];
+    for (const statement of statements) {
+      results.push(await statement.run());
+    }
+    return results;
   }
 }
 
@@ -237,5 +252,29 @@ describe("finalizeRemovalRequests", () => {
     // Number 2 → disputed
     const n2 = state.numbers.find((n) => n.id === 2);
     expect(n2?.status).toBe("disputed");
+  });
+
+  it("leaves already-resolved requests untouched", async () => {
+    const state: MockState = {
+      numbers: [
+        {
+          id: 1,
+          status: "disputed",
+          removal_request_id: 10,
+          updated_at: "",
+        },
+      ],
+      // Already contested by another writer after the cron read.
+      removalRequests: [
+        { id: 10, number_id: 1, status: "contested", updated_at: "" },
+      ],
+      contests: [],
+    };
+
+    await finalizeRemovalRequests(makeEnv(state));
+
+    expect(state.removalRequests[0]?.status).toBe("contested");
+    expect(state.numbers[0]?.status).toBe("disputed");
+    expect(state.numbers[0]?.removal_request_id).toBe(10);
   });
 });

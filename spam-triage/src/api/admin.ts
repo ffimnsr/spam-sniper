@@ -69,6 +69,8 @@ export interface AdminExportResponse {
 
 export interface AdminLoginResponse {
   ok: true;
+  token: string;
+  expiresAt: string;
   summary: AdminSummary;
   requests: AdminRemovalRequest[];
 }
@@ -98,9 +100,9 @@ function getApiErrorDetails(data: unknown, fallbackMessage: string) {
   };
 }
 
-async function apiGetWithAuth<T>(path: string, password: string): Promise<T> {
+async function apiGetWithAuth<T>(path: string, token: string): Promise<T> {
   const res = await fetch(path, {
-    headers: { Authorization: `Bearer ${password}` },
+    headers: { Authorization: `Bearer ${token}` },
   });
   const data = (await res.json().catch(() => null)) as unknown;
   if (!res.ok || !isRecord(data) || data.ok !== true) {
@@ -113,13 +115,13 @@ async function apiGetWithAuth<T>(path: string, password: string): Promise<T> {
 async function apiPostWithAuth<T>(
   path: string,
   body: unknown,
-  password: string,
+  token: string,
 ): Promise<T> {
   const res = await fetch(path, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      Authorization: `Bearer ${password}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body),
   });
@@ -131,10 +133,10 @@ async function apiPostWithAuth<T>(
   return data as T;
 }
 
-export function getAdminSummary(password: string) {
+export function getAdminSummary(token: string) {
   return apiGetWithAuth<AdminSummary>(
     getAdminSummaryApiPath(hiddenAdminRoute),
-    password,
+    token,
   );
 }
 
@@ -145,28 +147,28 @@ export function loginAdmin(password: string, turnstileToken: string) {
   });
 }
 
-export function getAdminRemovalRequests(password: string) {
+export function getAdminRemovalRequests(token: string) {
   return apiGetWithAuth<AdminRemovalRequestsResponse>(
     getAdminRemovalRequestsApiPath(hiddenAdminRoute),
-    password,
+    token,
   );
 }
 
 export function resolveAdminRemovalRequest(
   id: number,
   body: AdminResolveBody,
-  password: string,
+  token: string,
 ) {
   return apiPostWithAuth<AdminResolveResponse>(
     buildAdminResolveApiPath(hiddenAdminRoute, id),
     body,
-    password,
+    token,
   );
 }
 
-export function getAdminExport(password: string) {
+export function getAdminExport(token: string) {
   return apiGetWithAuth<AdminExportResponse>(
     getAdminExportApiPath(hiddenAdminRoute),
-    password,
+    token,
   );
 }

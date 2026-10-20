@@ -5,6 +5,8 @@ import {
   getAdminLoginApiPath,
   getAdminSummaryApiPath,
 } from "../../shared/admin-paths.ts";
+import { createAdminToken } from "../lib/admin-auth.ts";
+import { encryptE164 } from "../lib/encryption.ts";
 import type { Env } from "../types.ts";
 import {
   handleAdminExport,
@@ -14,10 +16,13 @@ import {
 } from "./admin.ts";
 
 function mockTurnstileResponse(success: boolean) {
-  return new Response(JSON.stringify({ success }), {
-    status: 200,
-    headers: { "content-type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ success, action: "admin_login", hostname: "example.com" }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  );
 }
 
 const hiddenAdminPath = "/intake/review/queue/manual/escalations/window/f4c9";
@@ -31,6 +36,7 @@ class MockStatement {
     exportRows: Array<{
       id: number;
       phone_number_e164: string | null;
+      phone_number_enc?: string | null;
       display_mask: string;
       country_code: string | null;
       report_count: number;
@@ -49,6 +55,7 @@ class MockStatement {
       exportRows: Array<{
         id: number;
         phone_number_e164: string | null;
+        phone_number_enc?: string | null;
         display_mask: string;
         country_code: string | null;
         report_count: number;
@@ -70,10 +77,27 @@ class MockStatement {
   }
 
   async first<T>() {
-    if (this.sql.includes("SELECT id, number_id FROM removal_requests")) {
+    if (this.sql.includes("AS total") && this.sql.includes("FROM numbers")) {
+      return {
+        total: 5,
+        pending: 2,
+        suspected: 1,
+        verified_spam: 1,
+        under_removal_review: 1,
+        disputed: 0,
+        removed: 0,
+        open_removal_requests: 2,
+        contested_removal_requests: 1,
+      } as T;
+    }
+
+    if (
+      this.sql.includes("SELECT id, number_id, status FROM removal_requests")
+    ) {
       return {
         id: this.state.removalRequest.id,
         number_id: this.state.removalRequest.numberId,
+        status: this.state.removalRequest.status,
       } as T;
     }
 
@@ -144,7 +168,12 @@ class MockStatement {
 
   async all<T>(): Promise<{ results: T[] }> {
     if (this.sql.includes("WHERE n.status = 'verified_spam'")) {
-      return { results: this.state.exportRows as T[] };
+      return {
+        results: this.state.exportRows.map((row) => ({
+          ...row,
+          top_category: "bank_scam",
+        })) as T[],
+      };
     }
 
     return { results: [] as T[] };
@@ -159,6 +188,7 @@ class MockDb {
     exportRows: Array<{
       id: number;
       phone_number_e164: string | null;
+      phone_number_enc?: string | null;
       display_mask: string;
       country_code: string | null;
       report_count: number;
@@ -175,6 +205,7 @@ class MockDb {
     exportRows: Array<{
       id: number;
       phone_number_e164: string | null;
+      phone_number_enc?: string | null;
       display_mask: string;
       country_code: string | null;
       report_count: number;
@@ -189,10 +220,19 @@ class MockDb {
   prepare(sql: string) {
     return new MockStatement(sql, this.state);
   }
+
+  async batch(statements: MockStatement[]) {
+    const results = [];
+    for (const statement of statements) {
+      results.push(await statement.run());
+    }
+    return results;
+  }
 }
 
 describe("handleAdminResolve", () => {
   let env: Env;
+  let adminToken: string;
   let state: {
     removalRequest: { id: number; numberId: number; status: string };
     number: { id: number; status: string; removalRequestId: number | null };
@@ -200,6 +240,7 @@ describe("handleAdminResolve", () => {
     exportRows: Array<{
       id: number;
       phone_number_e164: string | null;
+      phone_number_enc?: string | null;
       display_mask: string;
       country_code: string | null;
       report_count: number;
@@ -209,12 +250,14 @@ describe("handleAdminResolve", () => {
     }>;
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(mockTurnstileResponse(true)),
     );
+    adminToken = (await createAdminToken("secret")).token;
     state = {
       removalRequest: { id: 7, numberId: 11, status: "open" },
       number: { id: 11, status: "under_removal_review", removalRequestId: 7 },
@@ -249,7 +292,7 @@ describe("handleAdminResolve", () => {
       {
         method: "POST",
         headers: {
-          Authorization: "Bearer admin",
+          Authorization: `Bearer ${adminToken}`,
           "content-type": "application/json",
         },
         body: JSON.stringify({ action: "approve_removal" }),
@@ -272,7 +315,7 @@ describe("handleAdminResolve", () => {
       {
         method: "POST",
         headers: {
-          Authorization: "Bearer admin",
+          Authorization: `Bearer ${adminToken}`,
           "content-type": "application/json",
         },
         body: JSON.stringify({ action: "reject_removal" }),
@@ -293,7 +336,7 @@ describe("handleAdminResolve", () => {
       {
         method: "POST",
         headers: {
-          Authorization: "Bearer admin",
+          Authorization: `Bearer ${adminToken}`,
           "content-type": "application/json",
         },
         body: JSON.stringify({ action: "mark_disputed" }),
@@ -327,7 +370,7 @@ describe("handleAdminResolve", () => {
       {
         method: "POST",
         headers: {
-          Authorization: "Bearer admin",
+          Authorization: `Bearer ${adminToken}`,
           "content-type": "application/json",
         },
         body: JSON.stringify({ action: "delete_everything" }),
@@ -337,10 +380,71 @@ describe("handleAdminResolve", () => {
     const response = await handleAdminResolve(request, env);
     expect(response.status).toBe(400);
   });
+
+  it("rejects approve on a rejected removal request", async () => {
+    state.removalRequest.status = "rejected";
+
+    const request = new Request(
+      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ action: "approve_removal" }),
+      },
+    );
+
+    const response = await handleAdminResolve(request, env);
+    const body = (await response.json()) as { error?: { code?: string } };
+
+    expect(response.status).toBe(409);
+    expect(body.error?.code).toBe("INVALID_STATE");
+    expect(state.removalRequest.status).toBe("rejected");
+  });
+
+  it("rejects mark_disputed on an approved removal request", async () => {
+    state.removalRequest.status = "approved";
+
+    const request = new Request(
+      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ action: "mark_disputed" }),
+      },
+    );
+
+    const response = await handleAdminResolve(request, env);
+    expect(response.status).toBe(409);
+    expect(state.number.status).toBe("under_removal_review");
+  });
+
+  it("rejects the raw admin password as a bearer token", async () => {
+    const request = new Request(
+      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer admin-password",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ action: "approve_removal" }),
+      },
+    );
+
+    const response = await handleAdminResolve(request, env);
+    expect(response.status).toBe(401);
+  });
 });
 
 describe("handleAdminSummary", () => {
   let env: Env;
+  let adminToken: string;
   let state: {
     removalRequest: { id: number; numberId: number; status: string };
     number: { id: number; status: string; removalRequestId: number | null };
@@ -348,6 +452,7 @@ describe("handleAdminSummary", () => {
     exportRows: Array<{
       id: number;
       phone_number_e164: string | null;
+      phone_number_enc?: string | null;
       display_mask: string;
       country_code: string | null;
       report_count: number;
@@ -357,8 +462,14 @@ describe("handleAdminSummary", () => {
     }>;
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(mockTurnstileResponse(true)),
+    );
+    adminToken = (await createAdminToken("secret")).token;
     state = {
       removalRequest: { id: 7, numberId: 11, status: "open" },
       number: { id: 11, status: "under_removal_review", removalRequestId: 7 },
@@ -391,7 +502,7 @@ describe("handleAdminSummary", () => {
     const request = new Request(
       `https://example.com${getAdminSummaryApiPath(hiddenAdminPath)}`,
       {
-        headers: { Authorization: "Bearer admin" },
+        headers: { Authorization: `Bearer ${adminToken}` },
       },
     );
 
@@ -422,7 +533,7 @@ describe("handleAdminSummary", () => {
     const request = new Request(
       `https://example.com${getAdminExportApiPath(hiddenAdminPath)}`,
       {
-        headers: { Authorization: "Bearer admin" },
+        headers: { Authorization: `Bearer ${adminToken}` },
       },
     );
 
@@ -438,6 +549,29 @@ describe("handleAdminSummary", () => {
     expect(body.entries[0]?.phone_number_e164).toBe("+15551234567");
     expect(body.entries[0]?.display_mask).toBe("+1555 *** 4567");
     expect(body.entries[0]?.category).toBe("bank scam");
+  });
+
+  it("decrypts encrypted E.164 values in the export", async () => {
+    state.exportRows[0] = {
+      ...state.exportRows[0],
+      phone_number_e164: null,
+      phone_number_enc: await encryptE164("secret", "+15551234567"),
+    };
+
+    const request = new Request(
+      `https://example.com${getAdminExportApiPath(hiddenAdminPath)}`,
+      {
+        headers: { Authorization: `Bearer ${adminToken}` },
+      },
+    );
+
+    const response = await handleAdminExport(request, env);
+    const body = (await response.json()) as {
+      entries: Array<Record<string, unknown>>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.entries[0]?.phone_number_e164).toBe("+15551234567");
   });
 
   it("allows admin login with Turnstile and returns bootstrap data", async () => {
@@ -458,11 +592,38 @@ describe("handleAdminSummary", () => {
 
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
+    expect(typeof body.token).toBe("string");
+    expect(typeof body.expiresAt).toBe("string");
     expect(body.summary).toMatchObject({
       totalNumbers: 5,
       openRemovalRequests: 2,
     });
     expect(body.requests).toEqual([]);
+  });
+
+  it("verifies Turnstile before checking the password", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(mockTurnstileResponse(false)),
+    );
+
+    const request = new Request(
+      `https://example.com${getAdminLoginApiPath(hiddenAdminPath)}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          password: "wrong-password",
+          turnstileToken: "bad-token",
+        }),
+      },
+    );
+
+    const response = await handleAdminLogin(request, env);
+    const body = (await response.json()) as { error?: { code?: string } };
+
+    expect(response.status).toBe(400);
+    expect(body.error?.code).toBe("TURNSTILE_FAILED");
   });
 
   it("rejects admin login when Turnstile fails", async () => {

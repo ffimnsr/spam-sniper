@@ -18,6 +18,7 @@ import { soundFx } from "../lib/sound-fx.ts";
 
 export default function AdminPage() {
   const [password, setPassword] = useState("");
+  const [adminToken, setAdminToken] = useState("");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [resetKey, setResetKey] = useState(0);
   const [authenticated, setAuthenticated] = useState(false);
@@ -40,6 +41,8 @@ export default function AdminPage() {
     try {
       const res = await loginAdmin(password, turnstileToken);
       soundFx.success();
+      setAdminToken(res.token);
+      setPassword("");
       setSummary(res.summary);
       setRequests(res.requests);
       setAuthenticated(true);
@@ -53,6 +56,16 @@ export default function AdminPage() {
     }
   };
 
+  const handleSessionError = (err: unknown) => {
+    if (err instanceof Error && err.message.startsWith("UNAUTHORIZED:")) {
+      setAdminToken("");
+      setAuthenticated(false);
+      setTurnstileToken("");
+      setLoginError(new Error("Session expired. Please sign in again."));
+      setResetKey((prev) => prev + 1);
+    }
+  };
+
   const handleResolve = async (
     id: number,
     action: "approve_removal" | "reject_removal" | "mark_disputed",
@@ -60,12 +73,13 @@ export default function AdminPage() {
     setError(null);
     soundFx.scan();
     try {
-      await resolveAdminRemovalRequest(id, { action }, password);
+      await resolveAdminRemovalRequest(id, { action }, adminToken);
       soundFx.success();
       setRequests((prev) => prev.filter((r) => r.id !== id));
     } catch (err) {
       soundFx.error();
       setError(err);
+      handleSessionError(err);
     }
   };
 
@@ -74,12 +88,13 @@ export default function AdminPage() {
     setExportError(null);
     soundFx.scan();
     try {
-      const res = await getAdminExport(password);
+      const res = await getAdminExport(adminToken);
       soundFx.success();
       setExportData(res.entries);
     } catch (err) {
       soundFx.error();
       setExportError(err);
+      handleSessionError(err);
     } finally {
       setExportLoading(false);
     }
@@ -141,6 +156,7 @@ export default function AdminPage() {
               <div className="space-y-2">
                 <TurnstileWidget
                   resetKey={resetKey}
+                  action="admin_login"
                   onVerify={(token) => setTurnstileToken(token)}
                   onError={() => setTurnstileToken("")}
                 />

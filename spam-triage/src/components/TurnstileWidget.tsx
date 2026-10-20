@@ -4,6 +4,7 @@ interface TurnstileWidgetProps {
   onVerify: (token: string) => void;
   onError?: () => void;
   resetKey?: number | string;
+  action?: string;
   className?: string;
 }
 
@@ -16,6 +17,7 @@ declare global {
         element: string | HTMLElement,
         options: {
           sitekey: string;
+          action?: string;
           theme?: "light" | "dark" | "auto";
           size?: "normal" | "compact" | "flexible";
           callback: (token: string) => void;
@@ -32,6 +34,7 @@ export function TurnstileWidget({
   onVerify,
   onError,
   resetKey,
+  action,
   className,
 }: TurnstileWidgetProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -66,6 +69,7 @@ export function TurnstileWidget({
 
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
         sitekey: SITE_KEY,
+        action,
         theme: "dark",
         callback: (token: string) => {
           setIsVerified(true);
@@ -102,7 +106,7 @@ export function TurnstileWidget({
         }
       }
     };
-  }, [onVerify, onError, resetKey]);
+  }, [onVerify, onError, resetKey, action]);
 
   return (
     <div

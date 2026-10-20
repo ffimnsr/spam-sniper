@@ -1,5 +1,6 @@
 import {
   type CountryCode,
+  type PhoneNumber,
   parsePhoneNumberFromString,
 } from "libphonenumber-js";
 
@@ -22,30 +23,23 @@ export function normalizePhone(
     throw new Error("INVALID_PHONE_NUMBER");
   }
 
-  const e164 = parsed.format("E.164");
-  const countryCode = parsed.country;
-  const displayMask = maskPhone(e164, countryCode);
-
-  return { e164, countryCode, displayMask };
+  return {
+    e164: parsed.format("E.164"),
+    countryCode: parsed.country,
+    displayMask: maskPhone(parsed),
+  };
 }
 
-function maskPhone(e164: string, countryCode?: string): string {
-  // Keep country code prefix if available
-  let digits = e164.replace(/\D/g, "");
-  if (digits.startsWith("1") && countryCode === "US") {
-    digits = digits.slice(1);
-  }
-
-  if (digits.length < 7) {
+function maskPhone(parsed: PhoneNumber): string {
+  const national = parsed.nationalNumber;
+  if (national.length < 7) {
     return "***";
   }
 
-  const last4 = digits.slice(-4);
-  const prefixLen = Math.max(0, digits.length - 7);
-  const prefix = digits.slice(0, prefixLen);
+  const last4 = national.slice(-4);
+  const prefixLength = national.length - 7;
+  const prefix = national.slice(0, prefixLength);
+  const masked = prefix ? `${prefix} *** ${last4}` : `*** ${last4}`;
 
-  if (prefix) {
-    return `+${prefix} *** ${last4}`;
-  }
-  return `*** ${last4}`;
+  return `+${parsed.countryCallingCode} ${masked}`;
 }

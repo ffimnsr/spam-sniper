@@ -1,13 +1,28 @@
-import { hashNumber, hashRequester } from "../lib/hash.ts";
+import { isUniqueConstraintError } from "../lib/d1.ts";
+import { hashNumber, hashReporter } from "../lib/hash.ts";
 import { json, jsonError } from "../lib/http.ts";
 import { normalizePhone } from "../lib/phone.ts";
+import { enforceRateLimit } from "../lib/rate-limit.ts";
 import { readJsonObject } from "../lib/request.ts";
-import { verifyTurnstile } from "../lib/turnstile.ts";
+import { createPublicToken, PUBLIC_TOKEN_PATTERN } from "../lib/tokens.ts";
+import { turnstileOptions, verifyTurnstile } from "../lib/turnstile.ts";
 import {
   ContestBodySchema,
   RemovalRequestBodySchema,
 } from "../lib/validation.ts";
 import type { Env } from "../types.ts";
+
+export const REMOVAL_REQUEST_PATH_RE = new RegExp(
+  `^/api/removal-requests/(${PUBLIC_TOKEN_PATTERN})$`,
+);
+export const REMOVAL_REQUEST_CONTEST_PATH_RE = new RegExp(
+  `^/api/removal-requests/(${PUBLIC_TOKEN_PATTERN})/contest$`,
+);
+
+function parsePublicToken(pathname: string, pattern: RegExp): string | null {
+  const match = pathname.match(pattern);
+  return match?.[1] ?? null;
+}
 
 export async function handleCreateRemovalRequest(
   request: Request,
@@ -16,6 +31,9 @@ export async function handleCreateRemovalRequest(
   if (request.method !== "POST") {
     return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
   }
+
+  const limited = await enforceRateLimit(env, request, "removal-create");
+  if (limited) return limited;
 
   const bodyResult = await readJsonObject(request);
   if (!bodyResult.ok) {
@@ -35,6 +53,7 @@ export async function handleCreateRemovalRequest(
     env.TURNSTILE_SECRET_KEY,
     turnstileToken,
     ip,
+    turnstileOptions(env, request, "removal_request"),
   );
   if (!turnstileOk) {
     return jsonError("Turnstile verification failed", 400, "TURNSTILE_FAILED");
@@ -48,12 +67,13 @@ export async function handleCreateRemovalRequest(
   }
 
   const numberHash = await hashNumber(env.HASH_SECRET, normalized.e164);
-  const requesterHash = await hashRequester(env.HASH_SECRET, ip, userAgent);
+  const requesterHash = await hashReporter(env.HASH_SECRET, ip, userAgent);
   const now = new Date();
   const nowIso = now.toISOString();
   const deadline = new Date(
     now.getTime() + 7 * 24 * 60 * 60 * 1000,
   ).toISOString();
+  const publicToken = createPublicToken();
 
   const db = env.DB;
 
@@ -70,15 +90,7 @@ export async function handleCreateRemovalRequest(
       removal_request_id: number | null;
     }>();
 
-  if (!numberRow) {
-    return jsonError(
-      "Number has not been reported",
-      404,
-      "NUMBER_NOT_REPORTED",
-    );
-  }
-
-  if (numberRow.report_count <= 0) {
+  if (!numberRow || numberRow.report_count <= 0) {
     return jsonError(
       "Number has not been reported",
       404,
@@ -97,34 +109,65 @@ export async function handleCreateRemovalRequest(
       )
       .bind(numberRow.removal_request_id)
       .first<{ id: number; status: string; contest_deadline: string }>();
-    if (existing && existing.status === "open") {
+
+    if (existing?.status === "open") {
       return jsonError(
         "An open removal request already exists for this number",
         409,
         "DUPLICATE_REMOVAL_REQUEST",
       );
     }
+
+    // A contested request is waiting on operator review. Opening another
+    // request now would orphan the disputed record.
+    if (existing?.status === "contested") {
+      return jsonError(
+        "Removal request is already under review",
+        409,
+        "REMOVAL_UNDER_REVIEW",
+      );
+    }
   }
 
-  const rrInsert = await db
-    .prepare(
-      "INSERT INTO removal_requests (number_id, requester_hash, reason, status, contest_deadline, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    )
-    .bind(numberRow.id, requesterHash, reason, "open", deadline, nowIso, nowIso)
-    .run();
-
-  const removalRequestId = rrInsert.meta?.last_row_id ?? 0;
-
-  await db
-    .prepare(
-      "UPDATE numbers SET status = ?, removal_request_id = ?, updated_at = ? WHERE id = ?",
-    )
-    .bind("under_removal_review", removalRequestId, nowIso, numberRow.id)
-    .run();
+  // Insert the request and point the number at it in one transaction. The
+  // partial unique index on open requests also closes the check-then-insert
+  // race between concurrent submissions.
+  try {
+    await db.batch([
+      db
+        .prepare(
+          "INSERT INTO removal_requests (number_id, requester_hash, reason, status, contest_deadline, created_at, updated_at, public_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(
+          numberRow.id,
+          requesterHash,
+          reason,
+          "open",
+          deadline,
+          nowIso,
+          nowIso,
+          publicToken,
+        ),
+      db
+        .prepare(
+          "UPDATE numbers SET status = ?, removal_request_id = (SELECT id FROM removal_requests WHERE public_token = ?), updated_at = ? WHERE id = ?",
+        )
+        .bind("under_removal_review", publicToken, nowIso, numberRow.id),
+    ]);
+  } catch (e) {
+    if (isUniqueConstraintError(e)) {
+      return jsonError(
+        "An open removal request already exists for this number",
+        409,
+        "DUPLICATE_REMOVAL_REQUEST",
+      );
+    }
+    throw e;
+  }
 
   return json({
     ok: true,
-    removalRequestId,
+    publicToken,
     maskedNumber: normalized.displayMask,
     contestDeadline: deadline,
   });
@@ -138,21 +181,18 @@ export async function handleGetRemovalRequest(
     return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
   }
 
-  const url = new URL(request.url);
-  const match = url.pathname.match(/\/api\/removal-requests\/(\d+)/);
-  if (!match) {
-    return jsonError("Invalid removal request ID", 400, "VALIDATION_ERROR");
-  }
-
-  const id = Number(match[1]);
-  if (!Number.isFinite(id) || id <= 0) {
-    return jsonError("Invalid removal request ID", 400, "VALIDATION_ERROR");
+  const publicToken = parsePublicToken(
+    new URL(request.url).pathname,
+    REMOVAL_REQUEST_PATH_RE,
+  );
+  if (!publicToken) {
+    return jsonError("Invalid removal request token", 400, "VALIDATION_ERROR");
   }
 
   const rr = await env.DB.prepare(
-    "SELECT rr.id, rr.reason, rr.status, rr.contest_deadline, rr.created_at, n.display_mask FROM removal_requests rr JOIN numbers n ON rr.number_id = n.id WHERE rr.id = ?",
+    "SELECT rr.id, rr.reason, rr.status, rr.contest_deadline, rr.created_at, n.display_mask FROM removal_requests rr JOIN numbers n ON rr.number_id = n.id WHERE rr.public_token = ?",
   )
-    .bind(id)
+    .bind(publicToken)
     .first<{
       id: number;
       reason: string;
@@ -169,7 +209,7 @@ export async function handleGetRemovalRequest(
   const contestCountRes = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM removal_contests WHERE removal_request_id = ?",
   )
-    .bind(id)
+    .bind(rr.id)
     .first<{ count: number }>();
 
   const contestCount = contestCountRes?.count ?? 0;
@@ -178,7 +218,6 @@ export async function handleGetRemovalRequest(
 
   return json({
     ok: true,
-    removalRequestId: rr.id,
     maskedNumber: rr.display_mask,
     reason: rr.reason,
     status: rr.status,
@@ -196,15 +235,15 @@ export async function handleContestRemovalRequest(
     return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
   }
 
-  const url = new URL(request.url);
-  const match = url.pathname.match(/\/api\/removal-requests\/(\d+)\/contest/);
-  if (!match) {
-    return jsonError("Invalid removal request ID", 400, "VALIDATION_ERROR");
-  }
+  const limited = await enforceRateLimit(env, request, "removal-contest");
+  if (limited) return limited;
 
-  const id = Number(match[1]);
-  if (!Number.isFinite(id) || id <= 0) {
-    return jsonError("Invalid removal request ID", 400, "VALIDATION_ERROR");
+  const publicToken = parsePublicToken(
+    new URL(request.url).pathname,
+    REMOVAL_REQUEST_CONTEST_PATH_RE,
+  );
+  if (!publicToken) {
+    return jsonError("Invalid removal request token", 400, "VALIDATION_ERROR");
   }
 
   const bodyResult = await readJsonObject(request);
@@ -225,15 +264,16 @@ export async function handleContestRemovalRequest(
     env.TURNSTILE_SECRET_KEY,
     turnstileToken,
     ip,
+    turnstileOptions(env, request, "removal_contest"),
   );
   if (!turnstileOk) {
     return jsonError("Turnstile verification failed", 400, "TURNSTILE_FAILED");
   }
 
   const rr = await env.DB.prepare(
-    "SELECT id, number_id, status, contest_deadline FROM removal_requests WHERE id = ?",
+    "SELECT id, number_id, status, contest_deadline FROM removal_requests WHERE public_token = ?",
   )
-    .bind(id)
+    .bind(publicToken)
     .first<{
       id: number;
       number_id: number;
@@ -255,18 +295,33 @@ export async function handleContestRemovalRequest(
     return jsonError("Contest deadline has passed", 409, "DEADLINE_PASSED");
   }
 
-  const contestantHash = await hashRequester(env.HASH_SECRET, ip, userAgent);
+  const contestantHash = await hashReporter(env.HASH_SECRET, ip, userAgent);
   const now = new Date().toISOString();
 
+  // The INSERT is guarded by the same open+deadline predicate as the status
+  // updates, so a cron run cannot approve the request between check and write.
+  let insertedContests = 0;
   try {
-    await env.DB.prepare(
-      "INSERT INTO removal_contests (removal_request_id, contestant_hash, reason, created_at) VALUES (?, ?, ?, ?)",
-    )
-      .bind(id, contestantHash, reason, now)
-      .run();
+    const results = await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO removal_contests (removal_request_id, contestant_hash, reason, created_at)
+         SELECT ?, ?, ?, ?
+         WHERE EXISTS (
+           SELECT 1 FROM removal_requests
+           WHERE id = ? AND status = 'open' AND contest_deadline > ?
+         )`,
+      ).bind(rr.id, contestantHash, reason, now, rr.id, now),
+      env.DB.prepare(
+        "UPDATE removal_requests SET status = ?, updated_at = ? WHERE id = ? AND status = 'open' AND contest_deadline > ?",
+      ).bind("contested", now, rr.id, now),
+      env.DB.prepare(
+        "UPDATE numbers SET status = ?, updated_at = ? WHERE id = ? AND EXISTS (SELECT 1 FROM removal_requests WHERE id = ? AND status = ?)",
+      ).bind("disputed", now, rr.number_id, rr.id, "contested"),
+    ]);
+
+    insertedContests = results[0]?.meta?.changes ?? 0;
   } catch (e) {
-    const msg = String(e);
-    if (msg.includes("UNIQUE constraint failed")) {
+    if (isUniqueConstraintError(e)) {
       return jsonError(
         "You have already contested this removal request",
         409,
@@ -276,22 +331,18 @@ export async function handleContestRemovalRequest(
     throw e;
   }
 
-  await env.DB.prepare(
-    "UPDATE numbers SET status = ?, updated_at = ? WHERE id = ?",
-  )
-    .bind("disputed", now, rr.number_id)
-    .run();
-
-  await env.DB.prepare(
-    "UPDATE removal_requests SET status = ?, updated_at = ? WHERE id = ?",
-  )
-    .bind("contested", now, id)
-    .run();
+  if (insertedContests === 0) {
+    return jsonError(
+      "Removal request is not open for contest",
+      409,
+      "NOT_CONTESTABLE",
+    );
+  }
 
   const countRes = await env.DB.prepare(
     "SELECT COUNT(*) as count FROM removal_contests WHERE removal_request_id = ?",
   )
-    .bind(id)
+    .bind(rr.id)
     .first<{ count: number }>();
 
   return json({

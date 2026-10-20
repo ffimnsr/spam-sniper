@@ -63,6 +63,35 @@ describe("ReportBodySchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("rejects country values that are not 2 letters", () => {
+    for (const country of ["PHL", "P", "P1", ""]) {
+      const result = ReportBodySchema.safeParse({
+        phoneNumber: "+639171234567",
+        country,
+        category: "scam",
+        turnstileToken: "token",
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it("rejects oversized bodies", () => {
+    for (const body of [
+      {
+        phoneNumber: "1".repeat(41),
+        category: "scam",
+        turnstileToken: "token",
+      },
+      {
+        phoneNumber: "+639171234567",
+        category: "scam",
+        turnstileToken: "t".repeat(2049),
+      },
+    ]) {
+      expect(ReportBodySchema.safeParse(body).success).toBe(false);
+    }
+  });
 });
 
 describe("CheckQuerySchema", () => {

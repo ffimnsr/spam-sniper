@@ -61,7 +61,7 @@ export default function RemovePage() {
 
   const [result, setResult] = useState<{
     success: boolean;
-    removalRequestId?: number;
+    publicToken?: string;
     maskedNumber?: string;
     contestDeadline?: string;
   } | null>(null);
@@ -88,7 +88,7 @@ export default function RemovePage() {
       soundFx.success();
       setResult({
         success: true,
-        removalRequestId: res.removalRequestId,
+        publicToken: res.publicToken,
         maskedNumber: res.maskedNumber,
         contestDeadline: res.contestDeadline,
       });
@@ -172,6 +172,7 @@ export default function RemovePage() {
             <div className="space-y-2">
               <TurnstileWidget
                 resetKey={resetKey}
+                action="removal_request"
                 onVerify={(token) => setValue("turnstileToken", token)}
                 onError={() => setValue("turnstileToken", "")}
               />
@@ -207,7 +208,7 @@ export default function RemovePage() {
                 // DELIST_CHALLENGE_OPENED
               </span>
               <span className="font-mono text-xs text-slate-400">
-                CASE #{result.removalRequestId}
+                CASE #{result.publicToken?.slice(0, 8) ?? ""}
               </span>
             </div>
 
@@ -240,11 +241,13 @@ export default function RemovePage() {
             )}
 
             <div className="pt-2">
-              <Link to={`/removal/${result.removalRequestId}`}>
-                <Button variant="primary" className="text-xs !py-2.5">
-                  Track Removal Status & Window
-                </Button>
-              </Link>
+              {result.publicToken && (
+                <Link to={`/removal/${result.publicToken}`}>
+                  <Button variant="primary" className="text-xs !py-2.5">
+                    Track Removal Status & Window
+                  </Button>
+                </Link>
+              )}
             </div>
           </CardBody>
         </Card>

@@ -1,8 +1,9 @@
 import { hashNumber } from "../lib/hash.ts";
 import { json, jsonError } from "../lib/http.ts";
 import { normalizePhone } from "../lib/phone.ts";
+import { enforceRateLimit } from "../lib/rate-limit.ts";
 import { readJsonObject } from "../lib/request.ts";
-import { verifyTurnstile } from "../lib/turnstile.ts";
+import { turnstileOptions, verifyTurnstile } from "../lib/turnstile.ts";
 import { CheckQuerySchema } from "../lib/validation.ts";
 import type { Env } from "../types.ts";
 
@@ -14,6 +15,9 @@ export async function handleCheckNumber(
     return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
   }
 
+  const limited = await enforceRateLimit(env, request, "numbers-check");
+  if (limited) return limited;
+
   const bodyResult = await readJsonObject(request);
   if (!bodyResult.ok) {
     return bodyResult.response;
@@ -24,9 +28,12 @@ export async function handleCheckNumber(
     return jsonError("Invalid request body", 400, "VALIDATION_ERROR");
   }
 
+  const ip = request.headers.get("CF-Connecting-IP") ?? undefined;
   const turnstileOk = await verifyTurnstile(
     env.TURNSTILE_SECRET_KEY,
     parsed.data.turnstileToken,
+    ip,
+    turnstileOptions(env, request, "check"),
   );
   if (!turnstileOk) {
     return jsonError("Turnstile verification failed", 400, "TURNSTILE_FAILED");

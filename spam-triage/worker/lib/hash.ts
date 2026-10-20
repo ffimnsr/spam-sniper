@@ -45,19 +45,3 @@ function buildActorKey(ip?: string, userAgent?: string): string {
   // Fallback keeps local dev usable when CF-Connecting-IP is missing.
   return `anonymous:${userAgent?.trim().slice(0, 256) ?? "unknown"}`;
 }
-
-export async function hashRequester(
-  secret: string,
-  ip?: string,
-  userAgent?: string,
-): Promise<string> {
-  return hashReporter(secret, ip, userAgent);
-}
-
-export async function hashContestant(
-  secret: string,
-  ip?: string,
-  userAgent?: string,
-): Promise<string> {
-  return hashReporter(secret, ip, userAgent);
-}

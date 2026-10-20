@@ -6,7 +6,7 @@ describe("normalizePhone", () => {
     expect(normalizePhone("09171234567", "PH")).toMatchObject({
       e164: "+639171234567",
       countryCode: "PH",
-      displayMask: "+63917 *** 4567",
+      displayMask: "+63 917 *** 4567",
     });
   });
 
@@ -14,7 +14,7 @@ describe("normalizePhone", () => {
     expect(normalizePhone("+14155552671")).toMatchObject({
       e164: "+14155552671",
       countryCode: "US",
-      displayMask: "+415 *** 2671",
+      displayMask: "+1 415 *** 2671",
     });
   });
 
@@ -31,7 +31,7 @@ describe("normalizePhone", () => {
   it("accepts number with spaces and dashes", () => {
     expect(normalizePhone("+63 917-123-4567", "PH")).toMatchObject({
       e164: "+639171234567",
-      displayMask: "+63917 *** 4567",
+      displayMask: "+63 917 *** 4567",
     });
   });
 

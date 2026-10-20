@@ -227,6 +227,7 @@ export default function ReportPage() {
             <div className="space-y-2">
               <TurnstileWidget
                 resetKey={resetKey}
+                action="report"
                 onVerify={(token) => setValue("turnstileToken", token)}
                 onError={() => setValue("turnstileToken", "")}
               />

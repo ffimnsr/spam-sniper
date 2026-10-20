@@ -28,7 +28,16 @@ export async function readJsonObject(
     return { ok: true, value: {} };
   }
 
-  const body = JSON.parse(rawBody) as unknown;
+  let body: unknown;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return {
+      ok: false,
+      response: jsonError("Invalid JSON body", 400, "INVALID_JSON"),
+    };
+  }
+
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return {
       ok: false,

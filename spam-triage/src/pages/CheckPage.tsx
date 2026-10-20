@@ -142,6 +142,7 @@ export default function CheckPage() {
             <div className="space-y-2">
               <TurnstileWidget
                 resetKey={resetKey}
+                action="check"
                 onVerify={(token) => setValue("turnstileToken", token)}
                 onError={() => setValue("turnstileToken", "")}
               />

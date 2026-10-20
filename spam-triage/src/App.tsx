@@ -103,7 +103,7 @@ export default function App() {
               <Route path="/check" element={<CheckPage />} />
               <Route path="/report" element={<ReportPage />} />
               <Route path="/remove" element={<RemovePage />} />
-              <Route path="/removal/:id" element={<RemovalDetailPage />} />
+              <Route path="/removal/:token" element={<RemovalDetailPage />} />
               <Route path={hiddenAdminRoute} element={<AdminPage />} />
               <Route path="/404" element={<NotFoundPage />} />
               <Route path="*" element={<Navigate to="/404" />} />

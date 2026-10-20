@@ -1,11 +1,29 @@
+import { isUniqueConstraintError } from "../lib/d1.ts";
+import { encryptE164 } from "../lib/encryption.ts";
 import { hashNumber, hashReporter } from "../lib/hash.ts";
 import { json, jsonError } from "../lib/http.ts";
 import { normalizePhone } from "../lib/phone.ts";
+import { enforceRateLimit } from "../lib/rate-limit.ts";
 import { readJsonObject } from "../lib/request.ts";
-import { computeNumberStatus } from "../lib/scoring.ts";
-import { verifyTurnstile } from "../lib/turnstile.ts";
+import {
+  computeNumberStatus,
+  type RemovalRequestStatus,
+} from "../lib/scoring.ts";
+import { turnstileOptions, verifyTurnstile } from "../lib/turnstile.ts";
 import { ReportBodySchema } from "../lib/validation.ts";
 import type { Env } from "../types.ts";
+
+const REMOVAL_STATUSES = new Set<string>([
+  "open",
+  "approved",
+  "rejected",
+  "contested",
+]);
+
+function toRemovalStatus(value: string | null): RemovalRequestStatus | null {
+  if (!value || !REMOVAL_STATUSES.has(value)) return null;
+  return value as RemovalRequestStatus;
+}
 
 export async function handleReport(
   request: Request,
@@ -14,6 +32,9 @@ export async function handleReport(
   if (request.method !== "POST") {
     return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
   }
+
+  const limited = await enforceRateLimit(env, request, "reports");
+  if (limited) return limited;
 
   const bodyResult = await readJsonObject(request);
   if (!bodyResult.ok) {
@@ -33,6 +54,7 @@ export async function handleReport(
     env.TURNSTILE_SECRET_KEY,
     turnstileToken,
     ip,
+    turnstileOptions(env, request, "report"),
   );
   if (!turnstileOk) {
     return jsonError("Turnstile verification failed", 400, "TURNSTILE_FAILED");
@@ -55,27 +77,38 @@ export async function handleReport(
 
   const db = env.DB;
 
-  // Upsert number
-  let numberRow = await db
-    .prepare("SELECT * FROM numbers WHERE number_hash = ?")
+  // One lookup resolves both the number and its linked removal-request state.
+  const numberRow = await db
+    .prepare(
+      `SELECT n.id, n.phone_number_enc, n.phone_number_e164, n.status, n.report_count,
+              n.unique_reporter_count, n.removal_request_id, rr.status AS removal_status
+         FROM numbers n
+         LEFT JOIN removal_requests rr ON rr.id = n.removal_request_id
+        WHERE n.number_hash = ?`,
+    )
     .bind(numberHash)
     .first<{
       id: number;
+      phone_number_enc: string | null;
       phone_number_e164: string | null;
       status: string;
       report_count: number;
       unique_reporter_count: number;
       removal_request_id: number | null;
+      removal_status: string | null;
     }>();
 
+  let numberId: number;
+
   if (!numberRow) {
+    const encryptedNumber = await encryptE164(env.HASH_SECRET, normalized.e164);
     const insert = await db
       .prepare(
-        "INSERT INTO numbers (number_hash, phone_number_e164, display_mask, country_code, status, first_reported_at, last_reported_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO numbers (number_hash, phone_number_e164, phone_number_enc, display_mask, country_code, status, first_reported_at, last_reported_at, updated_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(number_hash) DO NOTHING",
       )
       .bind(
         numberHash,
-        normalized.e164,
+        encryptedNumber,
         normalized.displayMask,
         normalized.countryCode ?? null,
         "pending",
@@ -84,99 +117,96 @@ export async function handleReport(
         now,
       )
       .run();
-    const id = insert.meta?.last_row_id ?? 0;
-    numberRow = {
-      id,
-      phone_number_e164: normalized.e164,
-      status: "pending",
-      report_count: 0,
-      unique_reporter_count: 0,
-      removal_request_id: null,
-    };
-  } else if (!numberRow.phone_number_e164) {
-    await db
-      .prepare(
-        "UPDATE numbers SET phone_number_e164 = ?, display_mask = ?, country_code = ?, updated_at = ? WHERE id = ?",
-      )
-      .bind(
-        normalized.e164,
-        normalized.displayMask,
-        normalized.countryCode ?? null,
-        now,
-        numberRow.id,
-      )
-      .run();
 
-    numberRow.phone_number_e164 = normalized.e164;
+    const insertedId =
+      (insert.meta?.changes ?? 1) > 0 ? insert.meta?.last_row_id : undefined;
+    if (insertedId) {
+      numberId = insertedId;
+    } else {
+      // Another writer inserted this number between our lookup and insert.
+      const raced = await db
+        .prepare("SELECT id FROM numbers WHERE number_hash = ?")
+        .bind(numberHash)
+        .first<{ id: number }>();
+      if (!raced) {
+        throw new Error("NUMBER_INSERT_RACE");
+      }
+      numberId = raced.id;
+    }
+  } else {
+    numberId = numberRow.id;
+
+    // Rows created before at-rest encryption still carry plaintext. Encrypt on
+    // first touch so the daily migration only handles cold rows.
+    if (!numberRow.phone_number_enc) {
+      const encryptedNumber = await encryptE164(
+        env.HASH_SECRET,
+        numberRow.phone_number_e164 ?? normalized.e164,
+      );
+      await db
+        .prepare(
+          "UPDATE numbers SET phone_number_enc = ?, phone_number_e164 = NULL, display_mask = ?, country_code = ?, updated_at = ? WHERE id = ?",
+        )
+        .bind(
+          encryptedNumber,
+          normalized.displayMask,
+          normalized.countryCode ?? null,
+          now,
+          numberId,
+        )
+        .run();
+    }
   }
 
-  // Insert report with duplicate guard
+  // Insert the report and read the fresh counts in one transaction. A
+  // duplicate reporter aborts the batch before counts are recalculated.
+  let counts: { total: number; unique: number } | null = null;
   try {
-    await db
-      .prepare(
-        "INSERT INTO reports (number_id, reporter_hash, category, created_at) VALUES (?, ?, ?, ?)",
-      )
-      .bind(numberRow.id, reporterHash, category, now)
-      .run();
+    const [, countResult] = await db.batch([
+      db
+        .prepare(
+          "INSERT INTO reports (number_id, reporter_hash, category, created_at) VALUES (?, ?, ?, ?)",
+        )
+        .bind(numberId, reporterHash, category, now),
+      db
+        .prepare(
+          "SELECT COUNT(*) as total, COUNT(DISTINCT reporter_hash) as unique FROM reports WHERE number_id = ?",
+        )
+        .bind(numberId),
+    ]);
+
+    counts =
+      (countResult?.results?.[0] as
+        | { total: number; unique: number }
+        | undefined) ?? null;
   } catch (e) {
-    const msg = String(e);
-    if (msg.includes("UNIQUE constraint failed")) {
+    if (isUniqueConstraintError(e)) {
       return json({
         ok: true,
         duplicate: true,
         maskedNumber: normalized.displayMask,
-        status: numberRow.status,
-        reportCount: numberRow.report_count,
+        status: numberRow?.status ?? "pending",
+        reportCount: numberRow?.report_count ?? 0,
+        uniqueReporterCount: numberRow?.unique_reporter_count ?? 0,
       });
     }
     throw e;
   }
 
-  // Recalculate counts
-  const countRes = await db
-    .prepare(
-      "SELECT COUNT(*) as total, COUNT(DISTINCT reporter_hash) as unique FROM reports WHERE number_id = ?",
-    )
-    .bind(numberRow.id)
-    .first<{ total: number; unique: number }>();
-
-  const reportCount = countRes?.total ?? numberRow.report_count + 1;
+  const reportCount = counts?.total ?? (numberRow?.report_count ?? 0) + 1;
   const uniqueReporterCount =
-    countRes?.unique ?? numberRow.unique_reporter_count + 1;
-
-  // Check removal state for status computation
-  let removalRequestStatus:
-    | "open"
-    | "approved"
-    | "rejected"
-    | "contested"
-    | null = null;
-
-  if (numberRow.removal_request_id) {
-    const rr = await db
-      .prepare("SELECT status FROM removal_requests WHERE id = ?")
-      .bind(numberRow.removal_request_id)
-      .first<{ status: string }>();
-    if (
-      rr?.status === "open" ||
-      rr?.status === "approved" ||
-      rr?.status === "rejected" ||
-      rr?.status === "contested"
-    ) {
-      removalRequestStatus = rr.status;
-    }
-  }
+    counts?.unique ?? (numberRow?.unique_reporter_count ?? 0) + 1;
 
   const newStatus = computeNumberStatus(
     uniqueReporterCount,
-    removalRequestStatus,
+    toRemovalStatus(numberRow?.removal_status ?? null),
   );
 
   await db
     .prepare(
       "UPDATE numbers SET report_count = ?, unique_reporter_count = ?, status = ?, last_reported_at = ?, updated_at = ? WHERE id = ?",
     )
-    .bind(reportCount, uniqueReporterCount, newStatus, now, now, numberRow.id)
+    .bind(reportCount, uniqueReporterCount, newStatus, now, now, numberId)
     .run();
 
   return json({

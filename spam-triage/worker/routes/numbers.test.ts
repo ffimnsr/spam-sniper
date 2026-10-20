@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { handleCheckNumber } from "./numbers.ts";
 
 function mockTurnstileResponse(success: boolean) {
-  return new Response(JSON.stringify({ success }), {
-    status: 200,
-    headers: { "content-type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify({ success, action: "check", hostname: "example.com" }),
+    {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    },
+  );
 }
 
 class MockStatement {

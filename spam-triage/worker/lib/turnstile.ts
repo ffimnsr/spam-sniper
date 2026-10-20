@@ -1,7 +1,39 @@
+import type { Env } from "../types.ts";
+
+export interface TurnstileOptions {
+  expectedAction?: string;
+  expectedHostname?: string;
+}
+
+interface TurnstileResponse {
+  success?: unknown;
+  action?: unknown;
+  hostname?: unknown;
+}
+
+// Production tokens must come from the same origin and form that minted them.
+// Development mode skips both checks because Cloudflare test keys may omit
+// action/hostname fields.
+export function turnstileOptions(
+  env: Env,
+  request: Request,
+  action: string,
+): TurnstileOptions {
+  if (env.ENVIRONMENT === "development") {
+    return {};
+  }
+
+  return {
+    expectedAction: action,
+    expectedHostname: new URL(request.url).hostname.toLowerCase(),
+  };
+}
+
 export async function verifyTurnstile(
   secretKey: string,
   token: string,
   remoteIp?: string,
+  options: TurnstileOptions = {},
 ): Promise<boolean> {
   if (!token) return false;
 
@@ -31,6 +63,23 @@ export async function verifyTurnstile(
 
   if (!res.ok) return false;
 
-  const data = (await res.json()) as { success: boolean };
-  return data.success === true;
+  const data = (await res.json()) as TurnstileResponse;
+  if (data.success !== true) return false;
+
+  // A token minted for another form must not unlock this endpoint.
+  if (options.expectedAction && data.action !== options.expectedAction) {
+    return false;
+  }
+
+  // A token solved on another hostname must not be replayed here.
+  if (options.expectedHostname) {
+    if (
+      typeof data.hostname !== "string" ||
+      data.hostname.toLowerCase() !== options.expectedHostname
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }
