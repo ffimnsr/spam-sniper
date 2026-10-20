@@ -5,3 +5,14 @@ tasks:
     commands:
       - echo "Hello, World!"
     description: Sample greet command
+
+  rebase-dev-to-master:
+    description: Rebase master onto dev, push master to origin, then check out dev again
+    preconditions:
+      - command: git diff --quiet && git diff --cached --quiet
+        message: Working tree has uncommitted changes. Commit or stash them before rebasing.
+    commands:
+      - command: git checkout master
+      - command: git rebase dev
+      - command: git push origin master
+      - command: git checkout dev
