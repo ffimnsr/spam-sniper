@@ -41,6 +41,17 @@ export function TurnstileWidget({
   const widgetIdRef = useRef<string | null>(null);
   const [isVerified, setIsVerified] = useState(false);
 
+  // Callbacks are usually inline arrow functions. Keep them in refs so the
+  // widget effect depends only on resetKey/action instead of re-rendering on
+  // every parent render.
+  const onVerifyRef = useRef(onVerify);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onVerifyRef.current = onVerify;
+    onErrorRef.current = onError;
+  }, [onVerify, onError]);
+
   useEffect(() => {
     // Read resetKey to trigger re-render on challenge reset
     if (resetKey !== undefined) {
@@ -73,15 +84,15 @@ export function TurnstileWidget({
         theme: "dark",
         callback: (token: string) => {
           setIsVerified(true);
-          onVerify(token);
+          onVerifyRef.current(token);
         },
         errorCallback: () => {
           setIsVerified(false);
-          onError?.();
+          onErrorRef.current?.();
         },
         "expired-callback": () => {
           setIsVerified(false);
-          onVerify("");
+          onVerifyRef.current("");
         },
       });
     };
@@ -106,7 +117,7 @@ export function TurnstileWidget({
         }
       }
     };
-  }, [onVerify, onError, resetKey, action]);
+  }, [resetKey, action]);
 
   return (
     <div
