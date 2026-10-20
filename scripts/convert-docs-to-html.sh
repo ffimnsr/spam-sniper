@@ -35,13 +35,20 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-if ! python3 -c 'import markdown' >/dev/null 2>&1; then
-  cat <<'EOF' >&2
+PYTHON_BIN="python3"
+if ! "$PYTHON_BIN" -c 'import markdown' >/dev/null 2>&1; then
+  if [ -x "${REPO_ROOT}/.venv/bin/python3" ] && "${REPO_ROOT}/.venv/bin/python3" -c 'import markdown' >/dev/null 2>&1; then
+    PYTHON_BIN="${REPO_ROOT}/.venv/bin/python3"
+  elif [ -x "${REPO_ROOT}/.tmp-docs-venv/bin/python3" ] && "${REPO_ROOT}/.tmp-docs-venv/bin/python3" -c 'import markdown' >/dev/null 2>&1; then
+    PYTHON_BIN="${REPO_ROOT}/.tmp-docs-venv/bin/python3"
+  else
+    cat <<'EOF' >&2
 Error: python markdown module not found.
 Install it and rerun:
   python3 -m pip install markdown
 EOF
-  exit 1
+    exit 1
+  fi
 fi
 
 printf 'Converting markdown files from %s to %s\n' "$SRC_DIR" "$OUT_DIR"
@@ -83,10 +90,10 @@ for src in "$SRC_DIR"/*.md; do
     index_entries="<div class=\"doc-list\">"
   fi
 
-  index_entries+="<a class=\"doc-card\" href=\"${filename}.html\"><span class=\"doc-card__label\">$(printf '%s' "$page_title")</span><span class=\"doc-card__description\">${card_description}</span><span class=\"doc-card__meta\">Open document</span></a>"
+  index_entries+="<a class=\"doc-card\" href=\"${filename}.html\"><span class=\"doc-card__label\">$(printf '%s' "$page_title")</span><span class=\"doc-card__description\">${card_description}</span><span class=\"doc-card__meta\">// OPEN INTEL RECORD &#10142;</span></a>"
 
   if [ -n "$TEMPLATE_FILE" ]; then
-    python3 - <<PY
+    "$PYTHON_BIN" - <<PY
 import pathlib
 import markdown
 import re
@@ -115,7 +122,7 @@ output = output.replace("{{lede}}", r"$page_lede")
 pathlib.Path(r"$output_file").write_text(output, encoding='utf-8')
 PY
   else
-    python3 - <<PY
+    "$PYTHON_BIN" - <<PY
 import pathlib
 import markdown
 
@@ -133,7 +140,7 @@ done
 if [ -n "$index_entries" ]; then
   index_entries+="</div>"
 
-  python3 - <<PY
+  "$PYTHON_BIN" - <<PY
 import pathlib
 
 template = pathlib.Path(r"$TEMPLATE_FILE").read_text(encoding='utf-8')
@@ -147,10 +154,10 @@ index_body = """
 """
 
 output = template.replace("{{content}}", index_body)
-output = output.replace("{{title}}", "Documentation")
+output = output.replace("{{title}}", "Documentation Index")
 output = output.replace("{{filename}}", "index")
-output = output.replace("{{eyebrow}}", "Docs")
-output = output.replace("{{lede}}", "Privacy, support, and terms pages for SpamSniper, collected in one place.")
+output = output.replace("{{eyebrow}}", "INTEL ARCHIVE")
+output = output.replace("{{lede}}", "Privacy protocols, telemetry support, and terms of service for the Spam Sniper defense network.")
 pathlib.Path(r"$OUT_DIR/index.html").write_text(output, encoding='utf-8')
 PY
 
