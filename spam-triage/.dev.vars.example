@@ -1,4 +1,6 @@
 HASH_SECRET=dev-hash-secret-change-me-in-production
+HASH_SECRET_PREVIOUS=
 TURNSTILE_SECRET_KEY=1x0000000000000000000000000000000AA
-ADMIN_PASSWORD=dev-admin-password-change-me
+HIDDEN_ADMIN_PATH=/f4c9
+# Local-only bypass for Cloudflare Access and Turnstile action/hostname checks.
 ENVIRONMENT=development

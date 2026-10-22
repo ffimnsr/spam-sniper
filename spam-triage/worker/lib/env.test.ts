@@ -8,7 +8,6 @@ function makeEnv(): Env {
     ASSETS: { fetch: vi.fn() } as unknown as Fetcher,
     HASH_SECRET: "secret",
     TURNSTILE_SECRET_KEY: "turnstile",
-    ADMIN_PASSWORD: "admin",
     HIDDEN_ADMIN_PATH: "/hidden",
   };
 }

@@ -30,9 +30,10 @@ export default function HomePage() {
             </div>
             <p className="page-lede">
               Analyze incoming caller threat levels, broadcast decentralized
-              spam signals, or challenge flagged numbers. All records stay
-              privacy-first: one-way SHA-256 hashes, masked digits, zero user
-              tracking.
+              spam signals, or challenge flagged numbers. Records use keyed
+              HMAC-SHA256 lookup hashes, encrypted E.164 storage, and masked
+              digits. Reporter identifiers are used only for duplicate-report,
+              confidence, and abuse checks.
             </p>
           </div>
 
@@ -98,8 +99,9 @@ export default function HomePage() {
             </h2>
             <p className="text-sm leading-relaxed text-slate-300">
               Removal requests remain open for a mandatory 7-day public
-              challenge period. Uncontested numbers auto-resolve. Contested
-              numbers escalate to operator review.
+              challenge period. Uncontested low-confidence numbers auto-resolve.
+              Verified numbers and contested requests escalate to operator
+              review.
             </p>
           </CardBody>
         </Card>
@@ -109,16 +111,16 @@ export default function HomePage() {
             <div className="flex items-center justify-between">
               <p className="page-eyebrow">PROTOCOL 03</p>
               <span className="font-mono text-[10px] text-[var(--cp-pink)]">
-                [ZERO_FOOTPRINT]
+                [MINIMAL_FOOTPRINT]
               </span>
             </div>
             <h2 className="text-xl font-bold font-display text-white">
-              <GlitchText text="Zero User Tracking." as="span" />
+              <GlitchText text="Privacy-First Records." as="span" />
             </h2>
             <p className="text-sm leading-relaxed text-slate-300">
               Search, report, or challenge numbers without registration or
-              sign-in. All public telemetry displays masked strings and
-              irreversible cryptographic digests.
+              sign-in. Public responses show masked strings. Reporter hashes are
+              pseudonymous and never displayed or used for profiling.
             </p>
           </CardBody>
         </Card>

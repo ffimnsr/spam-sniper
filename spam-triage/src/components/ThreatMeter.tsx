@@ -2,6 +2,7 @@ interface ThreatMeterProps {
   status?: string;
   reportCount?: number;
   uniqueReporterCount?: number;
+  recentUniqueReporterCount?: number;
   found?: boolean;
 }
 
@@ -9,6 +10,7 @@ export function ThreatMeter({
   status,
   reportCount = 0,
   uniqueReporterCount = 0,
+  recentUniqueReporterCount,
   found = false,
 }: ThreatMeterProps) {
   let level = 0;
@@ -62,7 +64,7 @@ export function ThreatMeter({
     color = "text-yellow-400";
     barActiveColor = "bg-yellow-400 shadow-[0_0_10px_#ffe600]";
     description =
-      "Contested by multiple parties. Locked awaiting administrative decision.";
+      "Contested by a reporter. Locked awaiting administrative decision.";
   }
 
   return (
@@ -91,9 +93,12 @@ export function ThreatMeter({
         })}
       </div>
 
-      <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
         <span>Signal Volume: {reportCount}</span>
         <span>Unique Nodes: {uniqueReporterCount}</span>
+        {recentUniqueReporterCount !== undefined && (
+          <span>Recent Nodes: {recentUniqueReporterCount}</span>
+        )}
       </div>
 
       <p className="mt-2 text-xs leading-relaxed text-slate-300">

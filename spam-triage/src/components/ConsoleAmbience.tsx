@@ -7,22 +7,22 @@ import type { CSSProperties } from "react";
 const LEFT_LINES = [
   "> boot triage.shell --stream",
   "handshake: turnstile/ok",
-  "cipher: blake3-wasm / sha256",
-  "scan 128 caller hashes",
-  "community nodes: 42",
+  "hash: hmac-sha256 / aes-gcm",
+  "lookup: keyed number hash",
+  "reporter id: dedupe/abuse",
   "mask ledger: sync",
-  "shield health 100%",
+  "retention: bounded",
   "await next signal",
 ];
 
 const RIGHT_LINES = [
-  "> blocklist.db sync",
-  "verified targets: 312",
-  "risk: 1 signal per node",
-  "confidence ladder: armed",
-  "contest window: 7d",
-  "defense matrix active",
-  "anomaly index: 0.038",
+  "> blocklist export: verified",
+  "confidence: 3 unique nodes",
+  "challenge window: 7d",
+  "high confidence: operator review",
+  "maintenance: staggered daily",
+  "admin: cloudflare access",
+  "reconcile: enabled",
   "> _",
 ];
 

@@ -69,8 +69,8 @@ for src in "$SRC_DIR"/*.md; do
     privacy_policy)
       page_title="Privacy Policy"
       page_eyebrow="Privacy"
-      page_lede="What SpamSniper processes on-device, what it does not collect, and how privacy boundaries are enforced."
-      card_description="What the app stores locally, what stays on-device, and what is never collected."
+      page_lede="What SpamSniper and the Triage Terminal process, what they do not collect, and how privacy boundaries are enforced."
+      card_description="What the app stores locally, what the triage terminal stores, and what is never collected."
       ;;
     support)
       page_title="Support"

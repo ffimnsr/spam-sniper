@@ -1,280 +1,257 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Env } from "../types.ts";
+import { describe, expect, it } from "vitest";
+import { createTestDb, makeTestEnv } from "../test/sqlite-d1.ts";
 import { finalizeRemovalRequests } from "./finalize-removals.ts";
 
-type NumberRow = {
-  id: number;
-  status: string;
-  removal_request_id: number | null;
-  updated_at: string;
-};
+const NOW = new Date().toISOString();
+const PAST = new Date(Date.now() - 60_000).toISOString();
 
-type RemovalRequestRow = {
-  id: number;
-  number_id: number;
-  status: string;
-  updated_at: string;
-};
+function seed(
+  db: ReturnType<typeof createTestDb>,
+  options: {
+    numberId: number;
+    requestId: number;
+    recentUnique: number;
+    contests?: number;
+    linkNumber?: boolean;
+    status?: string;
+  },
+) {
+  db.raw()
+    .prepare(
+      `INSERT INTO numbers
+        (id, number_hash, display_mask, status, report_count, unique_reporter_count,
+         recent_unique_reporter_count, removal_request_id, first_reported_at,
+         last_reported_at, updated_at, status_checked_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      options.numberId,
+      `v2:number-${options.numberId}`,
+      "+1 555 *** 4567",
+      options.status ?? "under_removal_review",
+      options.recentUnique,
+      options.recentUnique,
+      options.recentUnique,
+      options.linkNumber === false ? null : options.requestId,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+    );
 
-interface MockState {
-  numbers: NumberRow[];
-  removalRequests: RemovalRequestRow[];
-  contests: { removalRequestId: number }[];
-}
+  db.raw()
+    .prepare(
+      `INSERT INTO removal_requests
+        (id, number_id, requester_hash, reason, status, contest_deadline, created_at, updated_at, public_token)
+       VALUES (?, ?, ?, 'personal_number', 'open', ?, ?, ?, ?)`,
+    )
+    .run(
+      options.requestId,
+      options.numberId,
+      "v2:requester",
+      PAST,
+      NOW,
+      NOW,
+      `token-${options.requestId}`,
+    );
 
-class MockStatement {
-  private readonly sql: string;
-  private readonly state: MockState;
-  private params: unknown[] = [];
-
-  constructor(sql: string, state: MockState) {
-    this.sql = sql;
-    this.state = state;
-  }
-
-  bind(...params: unknown[]) {
-    this.params = params;
-    return this;
-  }
-
-  async first<T>(): Promise<T | null> {
-    if (
-      this.sql.includes("FROM removal_contests WHERE removal_request_id = ?")
-    ) {
-      const rrId = Number(this.params[0]);
-      const count = this.state.contests.filter(
-        (c) => c.removalRequestId === rrId,
-      ).length;
-      return { count } as T;
-    }
-    return null as T;
-  }
-
-  async run() {
-    if (this.sql.includes("UPDATE removal_requests SET status = ?")) {
-      const newStatus = String(this.params[0]);
-      const id = Number(this.params[2]);
-      const rr = this.state.removalRequests.find((r) => r.id === id);
-      const hasContests = this.state.contests.some(
-        (c) => c.removalRequestId === id,
-      );
-      const wantsApproved = this.sql.includes("NOT EXISTS");
-      const wantsContested = this.sql.includes("EXISTS") && !wantsApproved;
-      const eligible =
-        rr?.status === "open" &&
-        ((wantsApproved && !hasContests) || (wantsContested && hasContests));
-
-      if (rr && eligible) {
-        rr.status = newStatus;
-        rr.updated_at = String(this.params[1]);
-        return { meta: { changes: 1 } };
-      }
-
-      return { meta: { changes: 0 } };
-    }
-
-    if (
-      this.sql.startsWith(
-        "UPDATE numbers SET status = ?, removal_request_id = NULL, updated_at = ? WHERE id = ?",
+  for (let index = 0; index < options.recentUnique; index++) {
+    db.raw()
+      .prepare(
+        "INSERT INTO reports (number_id, reporter_hash, category, created_at) VALUES (?, ?, 'scam', ?)",
       )
-    ) {
-      const newStatus = String(this.params[0]);
-      const id = Number(this.params[2]);
-      const num = this.state.numbers.find((n) => n.id === id);
-      if (num) {
-        num.status = newStatus;
-        num.removal_request_id = null;
-        num.updated_at = String(this.params[1]);
-      }
-      return { meta: {} };
-    }
+      .run(options.numberId, `v2:reporter-${options.numberId}-${index}`, NOW);
+  }
 
-    if (
-      this.sql.startsWith(
-        "UPDATE numbers SET status = ?, updated_at = ? WHERE id = ?",
+  for (let index = 0; index < (options.contests ?? 0); index++) {
+    db.raw()
+      .prepare(
+        `INSERT INTO removal_contests
+          (removal_request_id, contestant_hash, reason, created_at)
+         VALUES (?, ?, 'still_spam', ?)`,
       )
-    ) {
-      const newStatus = String(this.params[0]);
-      const id = Number(this.params[2]);
-      const num = this.state.numbers.find((n) => n.id === id);
-      if (num) {
-        num.status = newStatus;
-        num.updated_at = String(this.params[1]);
-      }
-      return { meta: {} };
-    }
-
-    return { meta: {} };
+      .run(options.requestId, `v2:contestant-${index}`, NOW);
   }
-
-  async all<T>(): Promise<{ results: T[] }> {
-    if (this.sql.includes("FROM removal_requests")) {
-      const due = this.state.removalRequests.filter((r) => r.status === "open");
-      return {
-        results: due.map((r) => ({
-          id: r.id,
-          number_id: r.number_id,
-        })) as T[],
-      };
-    }
-    return { results: [] as T[] };
-  }
-}
-
-class MockDb {
-  private readonly state: MockState;
-
-  constructor(state: MockState) {
-    this.state = state;
-  }
-
-  prepare(sql: string) {
-    return new MockStatement(sql, this.state);
-  }
-
-  async batch(statements: MockStatement[]) {
-    const results = [];
-    for (const statement of statements) {
-      results.push(await statement.run());
-    }
-    return results;
-  }
-}
-
-function makeEnv(state: MockState): Env {
-  return {
-    DB: new MockDb(state) as unknown as D1Database,
-    ASSETS: { fetch: vi.fn() } as unknown as Fetcher,
-    HASH_SECRET: "secret",
-    TURNSTILE_SECRET_KEY: "turnstile",
-    ADMIN_PASSWORD: "admin",
-    HIDDEN_ADMIN_PATH: "/hidden-review-path",
-  };
 }
 
 describe("finalizeRemovalRequests", () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
+  it("auto-approves uncontested low-confidence removals", async () => {
+    const db = createTestDb();
+    seed(db, { numberId: 1, requestId: 10, recentUnique: 2 });
+
+    db.resetQueryCount();
+    const result = await finalizeRemovalRequests(makeTestEnv(db));
+
+    expect(db.queryCount).toBeLessThan(50);
+    expect(result).toMatchObject({ processed: 1, approved: 1 });
+    const request = db
+      .raw()
+      .prepare("SELECT status FROM removal_requests WHERE id = 10")
+      .get() as { status: string };
+    const number = db
+      .raw()
+      .prepare("SELECT status, removal_request_id FROM numbers WHERE id = 1")
+      .get() as { status: string; removal_request_id: number };
+    expect(request.status).toBe("approved");
+    expect(number.status).toBe("removed");
+    expect(number.removal_request_id).toBe(10);
+
+    const audit = db
+      .raw()
+      .prepare(
+        "SELECT COUNT(*) AS count FROM admin_audit_log WHERE action = 'finalize_removal'",
+      )
+      .get() as { count: number };
+    expect(audit.count).toBe(1);
   });
 
-  it("approves removal when no contests exist", async () => {
-    const state: MockState = {
-      numbers: [
-        {
-          id: 1,
-          status: "under_removal_review",
-          removal_request_id: 10,
-          updated_at: "",
-        },
-      ],
-      removalRequests: [
-        { id: 10, number_id: 1, status: "open", updated_at: "" },
-      ],
-      contests: [],
-    };
+  it("links a number when the request pointer was missing", async () => {
+    const db = createTestDb();
+    seed(db, {
+      numberId: 1,
+      requestId: 10,
+      recentUnique: 1,
+      linkNumber: false,
+    });
 
-    await finalizeRemovalRequests(makeEnv(state));
+    await finalizeRemovalRequests(makeTestEnv(db));
 
-    // Removal request should be approved
-    const rr = state.removalRequests.find((r) => r.id === 10);
-    expect(rr?.status).toBe("approved");
-
-    // Number should be removed
-    const num = state.numbers.find((n) => n.id === 1);
-    expect(num?.status).toBe("removed");
-    expect(num?.removal_request_id).toBeNull();
+    const number = db
+      .raw()
+      .prepare("SELECT status, removal_request_id FROM numbers WHERE id = 1")
+      .get() as { status: string; removal_request_id: number };
+    expect(number.status).toBe("removed");
+    expect(number.removal_request_id).toBe(10);
   });
 
-  it("marks as contested/removed when contests exist", async () => {
-    const state: MockState = {
-      numbers: [
-        {
-          id: 1,
-          status: "under_removal_review",
-          removal_request_id: 10,
-          updated_at: "",
-        },
-      ],
-      removalRequests: [
-        { id: 10, number_id: 1, status: "open", updated_at: "" },
-      ],
-      contests: [{ removalRequestId: 10 }],
-    };
+  it("does not overwrite a removed number with a finalizer decision", async () => {
+    const db = createTestDb();
+    seed(db, {
+      numberId: 1,
+      requestId: 10,
+      recentUnique: 1,
+      linkNumber: false,
+      status: "removed",
+    });
 
-    await finalizeRemovalRequests(makeEnv(state));
+    await finalizeRemovalRequests(makeTestEnv(db));
 
-    // Removal request should be contested
-    const rr = state.removalRequests.find((r) => r.id === 10);
-    expect(rr?.status).toBe("contested");
-
-    // Number should be disputed
-    const num = state.numbers.find((n) => n.id === 1);
-    expect(num?.status).toBe("disputed");
+    const number = db
+      .raw()
+      .prepare("SELECT status, removal_request_id FROM numbers WHERE id = 1")
+      .get() as { status: string; removal_request_id: number | null };
+    expect(number.status).toBe("removed");
+    expect(number.removal_request_id).toBeNull();
   });
 
-  it("processes only open removal requests with passed deadline", async () => {
-    const state: MockState = {
-      numbers: [
-        {
-          id: 1,
-          status: "under_removal_review",
-          removal_request_id: 10,
-          updated_at: "",
-        },
-        {
-          id: 2,
-          status: "under_removal_review",
-          removal_request_id: 11,
-          updated_at: "",
-        },
-      ],
-      removalRequests: [
-        { id: 10, number_id: 1, status: "open", updated_at: "" },
-        { id: 11, number_id: 2, status: "open", updated_at: "" },
-      ],
-      contests: [{ removalRequestId: 11 }],
-    };
+  it("routes uncontested verified removals to operator review", async () => {
+    const db = createTestDb();
+    seed(db, { numberId: 1, requestId: 10, recentUnique: 3 });
 
-    await finalizeRemovalRequests(makeEnv(state));
+    const result = await finalizeRemovalRequests(makeTestEnv(db));
 
-    // RR 10 (no contests) → approved
-    const rr10 = state.removalRequests.find((r) => r.id === 10);
-    expect(rr10?.status).toBe("approved");
+    expect(result).toMatchObject({ processed: 1, pendingReview: 1 });
+    const request = db
+      .raw()
+      .prepare("SELECT status FROM removal_requests WHERE id = 10")
+      .get() as { status: string };
+    const number = db
+      .raw()
+      .prepare("SELECT status FROM numbers WHERE id = 1")
+      .get() as { status: string };
+    expect(request.status).toBe("pending_review");
+    expect(number.status).toBe("under_removal_review");
+  });
 
-    // RR 11 (has contests) → contested
-    const rr11 = state.removalRequests.find((r) => r.id === 11);
-    expect(rr11?.status).toBe("contested");
+  it("marks contested requests as disputed", async () => {
+    const db = createTestDb();
+    seed(db, { numberId: 1, requestId: 10, recentUnique: 1, contests: 1 });
 
-    // Number 1 → removed
-    const n1 = state.numbers.find((n) => n.id === 1);
-    expect(n1?.status).toBe("removed");
+    const result = await finalizeRemovalRequests(makeTestEnv(db));
 
-    // Number 2 → disputed
-    const n2 = state.numbers.find((n) => n.id === 2);
-    expect(n2?.status).toBe("disputed");
+    expect(result).toMatchObject({ processed: 1, contested: 1 });
+    const request = db
+      .raw()
+      .prepare("SELECT status FROM removal_requests WHERE id = 10")
+      .get() as { status: string };
+    const number = db
+      .raw()
+      .prepare("SELECT status FROM numbers WHERE id = 1")
+      .get() as { status: string };
+    expect(request.status).toBe("contested");
+    expect(number.status).toBe("disputed");
+  });
+
+  it("drains more than one bounded batch per run", async () => {
+    const db = createTestDb();
+    const insertNumber = db.raw().prepare(
+      `INSERT INTO numbers
+        (id, number_hash, display_mask, status, report_count, unique_reporter_count,
+         recent_unique_reporter_count, removal_request_id, first_reported_at,
+         last_reported_at, updated_at, status_checked_at)
+       VALUES (?, ?, ?, 'under_removal_review', 0, 0, 0, ?, ?, ?, ?, ?)`,
+    );
+    const insertRequest = db.raw().prepare(
+      `INSERT INTO removal_requests
+        (id, number_id, requester_hash, reason, status, contest_deadline, created_at, updated_at, public_token)
+       VALUES (?, ?, 'v2:requester', 'personal_number', 'open', ?, ?, ?, ?)`,
+    );
+
+    // 1,001 rows forces a second batch past FINALIZER_BATCH_SIZE.
+    for (let index = 1; index <= 1_001; index++) {
+      insertNumber.run(
+        index,
+        `v2:number-${index}`,
+        `+1 555 *** ${String(index).padStart(4, "0")}`,
+        index,
+        NOW,
+        NOW,
+        NOW,
+        NOW,
+      );
+      insertRequest.run(
+        index,
+        index,
+        PAST,
+        NOW,
+        NOW,
+        `abcdef0123456789abcdef01234567${index}`,
+      );
+    }
+
+    db.resetQueryCount();
+    const result = await finalizeRemovalRequests(makeTestEnv(db));
+
+    expect(db.queryCount).toBeLessThan(50);
+    expect(result).toMatchObject({
+      processed: 1_001,
+      approved: 1_001,
+      pendingReview: 0,
+      contested: 0,
+    });
+    const remaining = db
+      .raw()
+      .prepare(
+        "SELECT COUNT(*) AS count FROM removal_requests WHERE status = 'open'",
+      )
+      .get() as { count: number };
+    expect(remaining.count).toBe(0);
   });
 
   it("leaves already-resolved requests untouched", async () => {
-    const state: MockState = {
-      numbers: [
-        {
-          id: 1,
-          status: "disputed",
-          removal_request_id: 10,
-          updated_at: "",
-        },
-      ],
-      // Already contested by another writer after the cron read.
-      removalRequests: [
-        { id: 10, number_id: 1, status: "contested", updated_at: "" },
-      ],
-      contests: [],
-    };
+    const db = createTestDb();
+    seed(db, { numberId: 1, requestId: 10, recentUnique: 1 });
+    db.raw()
+      .prepare("UPDATE removal_requests SET status = 'contested' WHERE id = 10")
+      .run();
 
-    await finalizeRemovalRequests(makeEnv(state));
+    const result = await finalizeRemovalRequests(makeTestEnv(db));
 
-    expect(state.removalRequests[0]?.status).toBe("contested");
-    expect(state.numbers[0]?.status).toBe("disputed");
-    expect(state.numbers[0]?.removal_request_id).toBe(10);
+    expect(result.processed).toBe(0);
+    const number = db
+      .raw()
+      .prepare("SELECT status FROM numbers WHERE id = 1")
+      .get() as { status: string };
+    expect(number.status).toBe("under_removal_review");
   });
 });

@@ -36,17 +36,28 @@ export interface E164Cipher {
 }
 
 // At-rest encryption for E.164 values. The key is derived from HASH_SECRET with
-// a distinct label so number hashing and ciphertext never share a key. Reuse a
-// cipher instance for batch work so the key is derived once.
-export function createE164Cipher(secret: string): E164Cipher {
-  let keyPromise: Promise<CryptoKey> | null = null;
+// a distinct label so number hashing and ciphertext never share a key. During
+// rotation, previousSecret lets old ciphertext decrypt while new writes use the
+// current secret. Reuse a cipher instance for batch work.
+export function createE164Cipher(
+  secret: string,
+  previousSecret?: string,
+): E164Cipher {
+  let currentKeyPromise: Promise<CryptoKey> | null = null;
+  let previousKeyPromise: Promise<CryptoKey> | null = null;
 
-  const getKey = (): Promise<CryptoKey> => {
+  const getCurrentKey = (): Promise<CryptoKey> => {
     if (!secret) {
       return Promise.reject(new Error("ENCRYPTION_SECRET_MISSING"));
     }
-    keyPromise ??= deriveKey(secret);
-    return keyPromise;
+    currentKeyPromise ??= deriveKey(secret);
+    return currentKeyPromise;
+  };
+
+  const getPreviousKey = (): Promise<CryptoKey> | null => {
+    if (!previousSecret || previousSecret === secret) return null;
+    previousKeyPromise ??= deriveKey(previousSecret);
+    return previousKeyPromise;
   };
 
   return {
@@ -54,7 +65,7 @@ export function createE164Cipher(secret: string): E164Cipher {
       const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
       const ciphertext = await crypto.subtle.encrypt(
         { name: "AES-GCM", iv },
-        await getKey(),
+        await getCurrentKey(),
         new TextEncoder().encode(e164),
       );
 
@@ -67,20 +78,33 @@ export function createE164Cipher(secret: string): E164Cipher {
       const parts = payload.split(".");
       if (parts.length !== 3 || parts[0] !== VERSION) return null;
 
+      let iv: Uint8Array;
+      let ciphertext: Uint8Array;
       try {
-        const iv = hexToBytes(parts[1]);
+        iv = hexToBytes(parts[1]);
         if (iv.length !== IV_BYTES) return null;
-
-        const plaintext = await crypto.subtle.decrypt(
-          { name: "AES-GCM", iv },
-          await getKey(),
-          hexToBytes(parts[2]),
-        );
-
-        return new TextDecoder().decode(plaintext);
+        ciphertext = hexToBytes(parts[2]);
       } catch {
         return null;
       }
+
+      const keys = [await getCurrentKey(), getPreviousKey()];
+      for (const keyPromise of keys) {
+        if (!keyPromise) continue;
+        try {
+          const key = await keyPromise;
+          const plaintext = await crypto.subtle.decrypt(
+            { name: "AES-GCM", iv },
+            key,
+            ciphertext,
+          );
+          return new TextDecoder().decode(plaintext);
+        } catch {
+          // Try the next key during rotation.
+        }
+      }
+
+      return null;
     },
   };
 }
@@ -95,6 +119,7 @@ export async function encryptE164(
 export async function decryptE164(
   secret: string,
   payload: string | null,
+  previousSecret?: string,
 ): Promise<string | null> {
-  return createE164Cipher(secret).decrypt(payload);
+  return createE164Cipher(secret, previousSecret).decrypt(payload);
 }

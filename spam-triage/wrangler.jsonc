@@ -2,6 +2,11 @@
   "name": "spam-triage",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
   "routes": [
     {
       "pattern": "spam-sniper-triage.vastorigins.com",
@@ -34,9 +39,25 @@
         "limit": 60,
         "period": 60
       }
+    },
+    {
+      "name": "RATE_LIMITER_WRITE",
+      "namespace_id": "1002",
+      "simple": {
+        "limit": 10,
+        "period": 60
+      }
+    },
+    {
+      "name": "RATE_LIMITER_READ",
+      "namespace_id": "1003",
+      "simple": {
+        "limit": 60,
+        "period": 60
+      }
     }
   ],
   "triggers": {
-    "crons": ["0 0 * * *"]
+    "crons": ["0 0 * * *", "10 0 * * *", "20 0 * * *"]
   }
 }

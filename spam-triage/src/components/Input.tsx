@@ -1,4 +1,5 @@
 import { type ClassValue, clsx } from "clsx";
+import { useId } from "react";
 import { twMerge } from "tailwind-merge";
 
 function cn(...inputs: ClassValue[]) {
@@ -20,11 +21,21 @@ export function Input({
   leftAddon,
   rightAddon,
   className,
+  id,
   ...props
 }: InputProps) {
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
+  const errorId = `${inputId}-error`;
+  const helperId = `${inputId}-helper`;
+
   return (
     <div className="space-y-1.5">
-      {label && <label className="cyber-label">{label}</label>}
+      {label && (
+        <label htmlFor={inputId} className="cyber-label">
+          {label}
+        </label>
+      )}
       <div className="relative flex items-center">
         {leftAddon && (
           <div className="absolute left-3 z-10 flex items-center text-slate-400">
@@ -32,6 +43,10 @@ export function Input({
           </div>
         )}
         <input
+          {...props}
+          id={inputId}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? errorId : helper ? helperId : undefined}
           className={cn(
             "cyber-input block",
             leftAddon ? "pl-11" : "",
@@ -39,7 +54,6 @@ export function Input({
             error && "cyber-input--error text-red-200",
             className,
           )}
-          {...props}
         />
         {rightAddon && (
           <div className="absolute right-3 z-10 flex items-center text-slate-400">
@@ -48,10 +62,12 @@ export function Input({
         )}
       </div>
       {helper && !error && (
-        <p className="font-mono text-xs text-slate-400">{helper}</p>
+        <p id={helperId} className="font-mono text-xs text-slate-400">
+          {helper}
+        </p>
       )}
       {error && (
-        <p className="cyber-field-error">
+        <p id={errorId} role="alert" className="cyber-field-error">
           <span>[ERR]</span> {error}
         </p>
       )}

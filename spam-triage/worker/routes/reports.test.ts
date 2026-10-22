@@ -1,571 +1,220 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { encryptE164 } from "../lib/encryption.ts";
+import { hashNumber, hmacSha256 } from "../lib/hash.ts";
+import { createTestDb, makeTestEnv } from "../test/sqlite-d1.ts";
 import type { Env } from "../types.ts";
 import { handleReport } from "./reports.ts";
 
-type NumberRow = {
-  id: number;
-  number_hash: string;
-  phone_number_e164: string | null;
-  phone_number_enc: string | null;
-  display_mask: string;
-  country_code: string | null;
-  status: string;
-  report_count: number;
-  unique_reporter_count: number;
-  removal_request_id: number | null;
-  first_reported_at: string;
-  last_reported_at: string;
-  updated_at: string;
-};
-
-type ReportRow = {
-  id: number;
-  number_id: number;
-  reporter_hash: string;
-  category: string;
-  created_at: string;
-};
-
-type RemovalRequestRow = {
-  id: number;
-  status: string;
-};
-
-class MockStatement {
-  private readonly sql: string;
-  readonly runResult: { meta: { last_row_id: number } };
-  private params: unknown[] = [];
-  private readonly state: MockState;
-
-  constructor(sql: string, state: MockState) {
-    this.sql = sql;
-    this.state = state;
-    this.runResult = { meta: { last_row_id: 0 } };
-  }
-
-  bind(...params: unknown[]) {
-    this.params = params;
-    return this;
-  }
-
-  async first<T>(): Promise<T | null> {
-    if (this.sql.includes("FROM numbers n")) {
-      const numberRow = this.state.numberRow;
-      if (!numberRow) return null as T;
-      const rr = numberRow.removal_request_id
-        ? this.state.removalRequests.find(
-            (r) => r.id === numberRow.removal_request_id,
-          )
-        : undefined;
-      return { ...numberRow, removal_status: rr?.status ?? null } as T;
-    }
-    if (this.sql.includes("SELECT status FROM removal_requests")) {
-      if (this.state.numberRow?.removal_request_id) {
-        const rr = this.state.removalRequests.find(
-          (r) => r.id === this.state.numberRow?.removal_request_id,
-        );
-        if (rr) return { status: rr.status } as T;
-      }
-      return null as T;
-    }
-    if (this.sql.includes("SELECT id FROM numbers WHERE number_hash = ?")) {
-      return this.state.numberRow
-        ? ({ id: this.state.numberRow.id } as T)
-        : null;
-    }
-    if (
-      this.sql.includes(
-        "SELECT COUNT(*) as total, COUNT(DISTINCT reporter_hash) as unique FROM reports",
-      )
-    ) {
-      return this.countReports() as T;
-    }
-    return null as T;
-  }
-
-  private countReports() {
-    const reports = this.state.reports.filter(
-      (r) => r.number_id === this.state.numberRow?.id,
-    );
-    return {
-      total: reports.length,
-      unique: new Set(reports.map((r) => r.reporter_hash)).size,
-    };
-  }
-
-  async run() {
-    if (
-      this.sql.startsWith(
-        "SELECT COUNT(*) as total, COUNT(DISTINCT reporter_hash) as unique FROM reports",
-      )
-    ) {
-      return { results: [this.countReports()], meta: {} };
-    }
-    if (this.sql.startsWith("INSERT INTO numbers")) {
-      if (this.sql.includes("ON CONFLICT") && this.state.numberRow) {
-        this.runResult.meta.last_row_id = 0;
-        return this.runResult;
-      }
-      this.state.numberRow = {
-        id: 1,
-        number_hash: String(this.params[0]),
-        phone_number_e164: null,
-        phone_number_enc: String(this.params[1]),
-        display_mask: String(this.params[2]),
-        country_code: this.params[3] as string | null,
-        status: String(this.params[4]),
-        report_count: 0,
-        unique_reporter_count: 0,
-        removal_request_id: null,
-        first_reported_at: String(this.params[5]),
-        last_reported_at: String(this.params[6]),
-        updated_at: String(this.params[7]),
-      };
-      this.runResult.meta.last_row_id = 1;
-      return this.runResult;
-    }
-    if (this.sql.startsWith("INSERT INTO reports")) {
-      const numberId = Number(this.params[0]);
-      const reporterHash = String(this.params[1]);
-
-      // Check for duplicate
-      const exists = this.state.reports.some(
-        (r) => r.number_id === numberId && r.reporter_hash === reporterHash,
-      );
-      if (exists) {
-        throw new Error(
-          "UNIQUE constraint failed: reports(number_id, reporter_hash)",
-        );
-      }
-
-      const report: ReportRow = {
-        id: this.state.reports.length + 1,
-        number_id: numberId,
-        reporter_hash: reporterHash,
-        category: String(this.params[2]),
-        created_at: String(this.params[3]),
-      };
-      this.state.reports.push(report);
-      this.runResult.meta.last_row_id = report.id;
-      return this.runResult;
-    }
-    if (this.sql.includes("phone_number_enc = ?") && this.state.numberRow) {
-      this.state.numberRow.phone_number_enc = String(this.params[0]);
-      this.state.numberRow.phone_number_e164 = null;
-      return this.runResult;
-    }
-    if (this.sql.startsWith("UPDATE numbers SET")) {
-      if (this.state.numberRow) {
-        // find status param index
-        const statusIdx = this.sql.includes("report_count = ?") ? 2 : 0;
-        if (
-          this.params[statusIdx] &&
-          typeof this.params[statusIdx] === "string"
-        ) {
-          this.state.numberRow.status = String(this.params[statusIdx]);
-        }
-      }
-      return this.runResult;
-    }
-    return this.runResult;
-  }
+function stubTurnstile(
+  options: { success?: boolean; action?: string; hostname?: string } = {},
+) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success: options.success ?? true,
+            action: options.action ?? "report",
+            hostname: options.hostname ?? "example.com",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+    ),
+  );
 }
 
-interface MockState {
-  reports: ReportRow[];
-  numberRow: NumberRow | null;
-  removalRequests: RemovalRequestRow[];
-}
-
-class MockDb {
-  readonly state: MockState;
-
-  constructor(state: MockState) {
-    this.state = state;
-  }
-
-  prepare(sql: string) {
-    return new MockStatement(sql, this.state);
-  }
-
-  async batch(statements: MockStatement[]) {
-    const results = [];
-    for (const statement of statements) {
-      results.push(await statement.run());
-    }
-    return results;
-  }
-}
-
-function makeMockState(): MockState {
-  return {
-    reports: [],
-    numberRow: null,
-    removalRequests: [],
-  };
-}
-
-function makeEnv(state: MockState): Env {
-  return {
-    DB: new MockDb(state) as unknown as D1Database,
-    ASSETS: { fetch: vi.fn() } as unknown as Fetcher,
-    HASH_SECRET: "test-secret",
-    TURNSTILE_SECRET_KEY: "test-turnstile",
-    ADMIN_PASSWORD: "admin",
-    HIDDEN_ADMIN_PATH: "/hidden-review-path",
-  };
+function reportRequest(
+  body: Record<string, unknown>,
+  ip = "203.0.113.1",
+  userAgent = "vitest",
+): Request {
+  return new Request("https://example.com/api/reports", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "cf-connecting-ip": ip,
+      "user-agent": userAgent,
+    },
+    body: JSON.stringify({
+      phoneNumber: "+639171234567",
+      country: "PH",
+      category: "scam",
+      turnstileToken: "token",
+      ...body,
+    }),
+  });
 }
 
 describe("handleReport", () => {
+  let env: Env;
+  let db: ReturnType<typeof createTestDb>;
+
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              success: true,
-              action: "report",
-              hostname: "example.com",
-            }),
-            {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            },
-          ),
-      ),
-    );
+    stubTurnstile();
+    db = createTestDb();
+    env = makeTestEnv(db);
   });
 
   it("creates first report and returns pending status", async () => {
-    const state = makeMockState();
-    const env = makeEnv(state);
-
-    const request = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        category: "scam",
-        turnstileToken: "token",
-      }),
-    });
-
-    const response = await handleReport(request, env);
+    const response = await handleReport(reportRequest({}), env);
     const body = (await response.json()) as Record<string, unknown>;
 
     expect(response.status).toBe(200);
-    expect(body.ok).toBe(true);
-    expect(body.duplicate).toBe(false);
-    expect(body.maskedNumber).toBe("+63 917 *** 4567");
-    expect(body.status).toBe("pending");
-    expect(state.numberRow?.phone_number_e164).toBeNull();
-    expect(state.numberRow?.phone_number_enc).toMatch(
-      /^v1\.[0-9a-f]+\.[0-9a-f]+$/,
-    );
-  });
-
-  it("rejects invalid phone numbers", async () => {
-    const state = makeMockState();
-    const env = makeEnv(state);
-
-    const request = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        phoneNumber: "123",
-        country: "PH",
-        category: "scam",
-        turnstileToken: "token",
-      }),
+    expect(body).toMatchObject({
+      ok: true,
+      duplicate: false,
+      status: "pending",
+      reportCount: 1,
+      uniqueReporterCount: 1,
+      recentUniqueReporterCount: 1,
     });
 
-    const response = await handleReport(request, env);
-    expect(response.status).toBe(400);
+    const row = db.raw().prepare("SELECT * FROM numbers").get() as {
+      phone_number_e164: string | null;
+      phone_number_enc: string | null;
+      number_hash: string;
+    };
+    expect(row.phone_number_e164).toBeNull();
+    expect(row.phone_number_enc).toMatch(/^v1\.[0-9a-f]+\.[0-9a-f]+$/);
+    expect(row.number_hash).toMatch(/^v2:/);
+  });
+
+  it("reports a duplicate without increasing counts", async () => {
+    await handleReport(reportRequest({}), env);
+    const response = await handleReport(
+      reportRequest({ category: "phishing" }),
+      env,
+    );
     const body = (await response.json()) as Record<string, unknown>;
-    expect(body.ok).toBe(false);
+
+    expect(body.duplicate).toBe(true);
+    expect(body.reportCount).toBe(1);
+    const count = db
+      .raw()
+      .prepare("SELECT COUNT(*) AS count FROM reports")
+      .get() as { count: number };
+    expect(count.count).toBe(1);
   });
 
-  it("rejects Turnstile verification failure", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ success: false }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
-      ),
+  it("does not let user-agent rotation create duplicate reporters", async () => {
+    await handleReport(reportRequest({}, "203.0.113.1", "Agent/A"), env);
+    const response = await handleReport(
+      reportRequest({}, "203.0.113.1", "Agent/B"),
+      env,
     );
-
-    const state = makeMockState();
-    const env = makeEnv(state);
-
-    const request = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        category: "scam",
-        turnstileToken: "invalid",
-      }),
-    });
-
-    const response = await handleReport(request, env);
-    expect(response.status).toBe(400);
     const body = (await response.json()) as Record<string, unknown>;
-    expect(body.error as Record<string, unknown>).toHaveProperty(
-      "code",
-      "TURNSTILE_FAILED",
-    );
-  });
 
-  it("uses method-agnostic turnstile mock for remaining tests", async () => {
-    // Re-stub to pass Turnstile by default for the rest of this file
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              success: true,
-              action: "report",
-              hostname: "example.com",
-            }),
-            {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            },
-          ),
-      ),
-    );
-
-    const state = makeMockState();
-    const env = makeEnv(state);
-
-    const request = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.1",
-      },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        category: "scam",
-        turnstileToken: "token",
-      }),
-    });
-
-    const response = await handleReport(request, env);
-    expect(response.status).toBe(200);
-  });
-
-  it("reports as duplicate when same reporter reports same number", async () => {
-    const state = makeMockState();
-    const env = makeEnv(state);
-
-    // First report
-    const req1 = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.1",
-      },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        category: "scam",
-        turnstileToken: "token",
-      }),
-    });
-    await handleReport(req1, env);
-
-    // Second report — same reporter (same IP) → duplicate
-    const req2 = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.1",
-      },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        category: "phishing",
-        turnstileToken: "token",
-      }),
-    });
-    const res2 = await handleReport(req2, env);
-    const body2 = (await res2.json()) as Record<string, unknown>;
-
-    expect(body2.ok).toBe(true);
-    expect(body2.duplicate).toBe(true);
+    expect(body.duplicate).toBe(true);
+    expect(body.uniqueReporterCount).toBe(1);
   });
 
   it("advances status with multiple unique reporters", async () => {
-    const state = makeMockState();
-    const env = makeEnv(state);
+    const first = (await (
+      await handleReport(reportRequest({}, "203.0.113.1"), env)
+    ).json()) as Record<string, unknown>;
+    const second = (await (
+      await handleReport(reportRequest({}, "203.0.113.2"), env)
+    ).json()) as Record<string, unknown>;
+    const third = (await (
+      await handleReport(reportRequest({}, "203.0.113.3"), env)
+    ).json()) as Record<string, unknown>;
 
-    // First reporter → pending
-    const req1 = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.1",
-      },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        category: "scam",
-        turnstileToken: "token",
-      }),
-    });
-    const res1 = await handleReport(req1, env);
-    const body1 = (await res1.json()) as Record<string, unknown>;
-    expect(body1.status).toBe("pending");
-
-    // Second unique reporter → suspected
-    const req2 = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.2",
-      },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        category: "robocall",
-        turnstileToken: "token",
-      }),
-    });
-    const res2 = await handleReport(req2, env);
-    const body2 = (await res2.json()) as Record<string, unknown>;
-    expect(body2.status).toBe("suspected");
-
-    // Third unique reporter → verified_spam
-    const req3 = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.3",
-      },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        category: "bank_scam",
-        turnstileToken: "token",
-      }),
-    });
-    const res3 = await handleReport(req3, env);
-    const body3 = (await res3.json()) as Record<string, unknown>;
-    expect(body3.status).toBe("verified_spam");
+    expect(first.status).toBe("pending");
+    expect(second.status).toBe("suspected");
+    expect(third.status).toBe("verified_spam");
   });
 
-  it("returns 429 when the rate limiter rejects the request", async () => {
-    const state = makeMockState();
-    const env = {
-      ...makeEnv(state),
-      RATE_LIMITER: { limit: vi.fn(async () => ({ success: false })) },
-    };
+  it("ignores reports outside the recent confidence window", async () => {
+    await handleReport(reportRequest({}, "203.0.113.1"), env);
+    db.raw()
+      .prepare(
+        "UPDATE reports SET created_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-120 days')",
+      )
+      .run();
 
-    const request = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        category: "scam",
-        turnstileToken: "token",
-      }),
-    });
+    const response = await handleReport(reportRequest({}, "203.0.113.2"), env);
+    const body = (await response.json()) as Record<string, unknown>;
 
-    const response = await handleReport(request, env);
+    expect(body.status).toBe("pending");
+    expect(body.recentUniqueReporterCount).toBe(1);
+    expect(body.reportCount).toBe(2);
+  });
+
+  it("migrates a legacy hash during key rotation", async () => {
+    const previousSecret = "old-secret";
+    const e164 = "+639171234567";
+    const legacyHash = await hmacSha256(previousSecret, e164);
+    const legacyCiphertext = await encryptE164(previousSecret, e164);
+
+    db.raw()
+      .prepare(
+        `INSERT INTO numbers
+          (number_hash, phone_number_e164, phone_number_enc, display_mask, country_code, status, first_reported_at, last_reported_at, updated_at)
+         VALUES (?, NULL, ?, ?, ?, 'pending', ?, ?, ?)`,
+      )
+      .run(
+        legacyHash,
+        legacyCiphertext,
+        "+63 917 *** 4567",
+        "PH",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      );
+
+    env.HASH_SECRET_PREVIOUS = previousSecret;
+    const response = await handleReport(reportRequest({}), env);
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(body.reportCount).toBe(1);
+    const row = db
+      .raw()
+      .prepare("SELECT number_hash, phone_number_enc FROM numbers")
+      .get() as { number_hash: string; phone_number_enc: string };
+    expect(row.number_hash).toBe(await hashNumber("test-secret", e164));
+    expect(row.phone_number_enc).not.toBe(legacyCiphertext);
+  });
+
+  it("rejects invalid phone numbers", async () => {
+    const response = await handleReport(
+      reportRequest({ phoneNumber: "123" }),
+      env,
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects Turnstile verification failure", async () => {
+    stubTurnstile({ success: false });
+    const response = await handleReport(reportRequest({}), env);
+    const body = (await response.json()) as { error?: { code?: string } };
+    expect(response.status).toBe(400);
+    expect(body.error?.code).toBe("TURNSTILE_FAILED");
+  });
+
+  it("rejects a token minted for another action", async () => {
+    stubTurnstile({ action: "numbers_check" });
+    const response = await handleReport(reportRequest({}), env);
+    expect(response.status).toBe(400);
+  });
+
+  it("rejects a token solved on another hostname", async () => {
+    stubTurnstile({ hostname: "evil.example" });
+    const response = await handleReport(reportRequest({}), env);
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 429 when the write rate limiter rejects the request", async () => {
+    env.RATE_LIMITER_WRITE = { limit: vi.fn(async () => ({ success: false })) };
+    const response = await handleReport(reportRequest({}), env);
     const body = (await response.json()) as { error?: { code?: string } };
 
     expect(response.status).toBe(429);
     expect(body.error?.code).toBe("RATE_LIMITED");
-  });
-
-  it("rejects a Turnstile token minted for another action", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              success: true,
-              action: "numbers_check",
-              hostname: "example.com",
-            }),
-            {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            },
-          ),
-      ),
-    );
-
-    const state = makeMockState();
-    const env = makeEnv(state);
-
-    const request = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        category: "scam",
-        turnstileToken: "token",
-      }),
-    });
-
-    const response = await handleReport(request, env);
-    const body = (await response.json()) as { error?: { code?: string } };
-
-    expect(response.status).toBe(400);
-    expect(body.error?.code).toBe("TURNSTILE_FAILED");
-  });
-
-  it("rejects a Turnstile token solved on another hostname", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              success: true,
-              action: "report",
-              hostname: "evil.example",
-            }),
-            {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            },
-          ),
-      ),
-    );
-
-    const state = makeMockState();
-    const env = makeEnv(state);
-
-    const request = new Request("https://example.com/api/reports", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        category: "scam",
-        turnstileToken: "token",
-      }),
-    });
-
-    const response = await handleReport(request, env);
-    const body = (await response.json()) as { error?: { code?: string } };
-
-    expect(response.status).toBe(400);
-    expect(body.error?.code).toBe("TURNSTILE_FAILED");
   });
 });

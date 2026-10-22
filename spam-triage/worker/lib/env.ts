@@ -5,7 +5,6 @@ const REQUIRED_KEYS = [
   "ASSETS",
   "HASH_SECRET",
   "TURNSTILE_SECRET_KEY",
-  "ADMIN_PASSWORD",
   "HIDDEN_ADMIN_PATH",
 ] as const;
 

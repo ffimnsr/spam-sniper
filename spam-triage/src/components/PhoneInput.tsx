@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   detectCountryFromInput,
   formatAsYouType,
@@ -30,6 +30,10 @@ export function PhoneInput({
   disabled = false,
 }: PhoneInputProps) {
   const [selectedCountry, setSelectedCountry] = useState(country);
+  const inputId = useId();
+  const countryId = useId();
+  const errorId = `${inputId}-error`;
+  const helperId = `${inputId}-helper`;
 
   useEffect(() => {
     setSelectedCountry(country);
@@ -77,7 +81,10 @@ export function PhoneInput({
   return (
     <div className="space-y-1.5 font-mono">
       {label && (
-        <label className="flex items-center justify-between font-mono text-xs font-bold uppercase tracking-wider text-cyan-400">
+        <label
+          htmlFor={inputId}
+          className="flex items-center justify-between font-mono text-xs font-bold uppercase tracking-wider text-cyan-400"
+        >
           <span className="cyber-label">{label}</span>
           <span className="text-slate-500 font-mono text-[10px]">
             [REGION: {selectedCountry}]
@@ -89,6 +96,8 @@ export function PhoneInput({
         {/* Country Selector */}
         <div className="relative w-36 shrink-0">
           <select
+            id={countryId}
+            aria-label="Country code"
             value={selectedCountry}
             onChange={handleCountrySelect}
             disabled={disabled}
@@ -106,6 +115,7 @@ export function PhoneInput({
           </select>
           <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-cyan-400">
             <svg
+              aria-hidden="true"
               className="h-3.5 w-3.5 fill-current"
               viewBox="0 0 20 20"
               xmlns="http://www.w3.org/2000/svg"
@@ -118,10 +128,13 @@ export function PhoneInput({
         {/* Phone Input Field */}
         <div className="relative flex-1">
           <input
+            id={inputId}
             type="tel"
             value={value}
             onChange={handleInputChange}
             disabled={disabled}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? errorId : helper ? helperId : undefined}
             placeholder={placeholder || defaultPlaceholder}
             className={`cyber-input w-full px-4 py-2.5 text-sm disabled:opacity-50 ${
               error ? "cyber-input--error text-red-100" : ""
@@ -154,11 +167,13 @@ export function PhoneInput({
       )}
 
       {helper && !error && (
-        <p className="font-mono text-xs text-slate-400">{helper}</p>
+        <p id={helperId} className="font-mono text-xs text-slate-400">
+          {helper}
+        </p>
       )}
 
       {error && (
-        <p className="cyber-field-error">
+        <p id={errorId} role="alert" className="cyber-field-error">
           <span>[ERR]</span> {error}
         </p>
       )}

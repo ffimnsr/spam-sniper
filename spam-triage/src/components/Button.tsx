@@ -34,6 +34,7 @@ export function Button({
   return (
     <button
       disabled={disabled || loading}
+      aria-busy={loading}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       className={cn(
@@ -48,6 +49,7 @@ export function Button({
     >
       {loading ? (
         <svg
+          aria-hidden="true"
           className="mr-2 h-4 w-4 animate-spin text-current"
           viewBox="0 0 24 24"
           fill="none"

@@ -81,6 +81,7 @@ export default function ReportPage() {
     status?: string;
     reportCount?: number;
     uniqueReporterCount?: number;
+    recentUniqueReporterCount?: number;
   } | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -116,6 +117,7 @@ export default function ReportPage() {
         status: res.status,
         reportCount: res.reportCount,
         uniqueReporterCount: res.uniqueReporterCount,
+        recentUniqueReporterCount: res.recentUniqueReporterCount,
       });
 
       reset({
@@ -179,18 +181,23 @@ export default function ReportPage() {
 
             {/* Cyber Threat Category Selector */}
             <div className="space-y-2">
-              <label className="flex items-center gap-1.5 font-sans text-xs font-bold uppercase tracking-wider text-cyan-400">
+              <span className="flex items-center gap-1.5 font-sans text-xs font-bold uppercase tracking-wider text-cyan-400">
                 <span className="text-[var(--cp-pink)]">//</span> THREAT
                 CLASSIFICATION
-              </label>
+              </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div
+                role="group"
+                aria-label="Threat classification"
+                className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+              >
                 {categories.map((cat) => {
                   const isSelected = selectedCategory === cat.value;
                   return (
                     <button
                       type="button"
                       key={cat.value}
+                      aria-pressed={isSelected}
                       onClick={() => {
                         soundFx.click();
                         setValue("category", cat.value);
@@ -296,6 +303,7 @@ export default function ReportPage() {
               status={result.status}
               reportCount={result.reportCount}
               uniqueReporterCount={result.uniqueReporterCount}
+              recentUniqueReporterCount={result.recentUniqueReporterCount}
             />
 
             {result.duplicate ? (

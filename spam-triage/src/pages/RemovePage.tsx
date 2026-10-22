@@ -64,6 +64,7 @@ export default function RemovePage() {
     publicToken?: string;
     maskedNumber?: string;
     contestDeadline?: string;
+    reviewRequired?: boolean;
   } | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -91,6 +92,7 @@ export default function RemovePage() {
         publicToken: res.publicToken,
         maskedNumber: res.maskedNumber,
         contestDeadline: res.contestDeadline,
+        reviewRequired: res.reviewRequired,
       });
 
       reset({
@@ -124,8 +126,8 @@ export default function RemovePage() {
         </h1>
         <p className="page-lede">
           Initiate a transparent removal challenge. Submitting opens a public
-          7-day contest window. If un-challenged, the record automatically
-          clears from active blocklists.
+          7-day contest window. Uncontested low-confidence records auto-clear;
+          verified numbers go to operator review.
         </p>
       </section>
 
@@ -136,8 +138,8 @@ export default function RemovePage() {
         </p>
         <p className="text-slate-400 leading-relaxed">
           Removal requests stay open for public challenge. Anyone can contest
-          the removal if the number is actively spamming. Contested numbers are
-          referred to manual triage review.
+          the removal if the number is actively spamming. Contested numbers and
+          verified-spam removals are referred to manual triage review.
         </p>
       </div>
 
@@ -237,7 +239,9 @@ export default function RemovePage() {
                 <span className="text-white font-bold">
                   {new Date(result.contestDeadline).toLocaleDateString()}
                 </span>{" "}
-                (auto-resolves if zero counter-claims submitted)
+                {result.reviewRequired
+                  ? "(verified numbers go to operator review)"
+                  : "(auto-resolves if zero counter-claims submitted)"}
               </p>
             )}
 

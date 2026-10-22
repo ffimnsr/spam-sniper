@@ -6,11 +6,12 @@
  * failures, and clipped corners instead of rounded panels.
  */
 @theme {
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", "Inter", sans-serif;
-  --font-orbitron: "Space Grotesk", "Inter", sans-serif;
-  --font-rajdhani: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk Variable", "Inter Variable", sans-serif;
+  --font-orbitron: "Space Grotesk Variable", "Inter Variable", sans-serif;
+  --font-rajdhani: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
 
   /* Sharp HUD surfaces; rounded-* utilities intentionally collapse to zero. */
   --radius-xs: 0px;
@@ -156,7 +157,7 @@
   --cp-text-dim: #9ab4c2;
   --cp-muted: #5a7a8a;
 
-  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --max-w: 1180px;
   --clip-corner: polygon(
     0 0,

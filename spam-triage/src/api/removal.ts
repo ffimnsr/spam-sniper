@@ -12,6 +12,7 @@ export interface CreateRemovalRequestResponse {
   publicToken: string;
   maskedNumber: string;
   contestDeadline: string;
+  reviewRequired: boolean;
 }
 
 export function createRemovalRequest(body: CreateRemovalRequestBody) {
@@ -26,6 +27,7 @@ export interface RemovalRequestDetail {
   contestDeadline: string;
   contestCount: number;
   contestWindowOpen: boolean;
+  reviewRequired: boolean;
 }
 
 export function getRemovalRequest(publicToken: string) {

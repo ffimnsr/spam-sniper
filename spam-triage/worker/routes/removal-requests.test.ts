@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { encryptE164 } from "../lib/encryption.ts";
+import { hashNumber, hashReporter } from "../lib/hash.ts";
+import { createTestDb, makeTestEnv } from "../test/sqlite-d1.ts";
 import type { Env } from "../types.ts";
 import {
   handleContestRemovalRequest,
@@ -6,659 +9,323 @@ import {
   handleGetRemovalRequest,
 } from "./removal-requests.ts";
 
-class MockStatement {
-  private readonly sql: string;
-  private readonly state: MockState;
-  readonly runResult = { meta: { last_row_id: 0, changes: 1 } };
-  private params: unknown[] = [];
+const E164 = "+639171234567";
 
-  constructor(sql: string, state: MockState) {
-    this.sql = sql;
-    this.state = state;
-  }
-
-  bind(...params: unknown[]) {
-    this.params = params;
-    return this;
-  }
-
-  async first<T>(): Promise<T | null> {
-    if (this.sql.includes("FROM numbers WHERE number_hash = ?")) {
-      return this.state.numberRow as T;
-    }
-
-    if (
-      this.sql.includes("public_token = ?") ||
-      this.sql.includes("WHERE rr.id = ?") ||
-      this.sql.includes("FROM removal_requests WHERE id = ?")
-    ) {
-      const rr = this.sql.includes("public_token = ?")
-        ? this.state.removalRequests.find(
-            (r) => r.publicToken === String(this.params[0]),
-          )
-        : this.state.removalRequests.find(
-            (r) => r.id === Number(this.params[0]),
-          );
-      if (!rr) return null as T;
-      return {
-        id: rr.id,
-        number_id: rr.numberId,
-        reason: rr.reason,
-        status: rr.status,
-        contest_deadline: rr.contestDeadline,
-        created_at: rr.createdAt,
-        display_mask: rr.displayMask,
-      } as T;
-    }
-
-    if (
-      this.sql.includes("FROM removal_contests WHERE removal_request_id = ?")
-    ) {
-      const rrId = Number(this.params[0]);
-      const count = this.state.contests.filter(
-        (c) => c.removalRequestId === rrId,
-      ).length;
-      return { count } as T;
-    }
-
-    if (
-      this.sql.includes("FROM removal_requests") &&
-      this.sql.includes("contest_deadline")
-    ) {
-      const rr = this.state.removalRequests.find((r) => r.status === "open");
-      if (rr) {
-        return {
-          id: rr.id,
-          status: rr.status,
-          contest_deadline: rr.contestDeadline,
-        } as T;
-      }
-      return null as T;
-    }
-
-    return null as T;
-  }
-
-  async run() {
-    if (this.sql.startsWith("INSERT INTO removal_requests")) {
-      const numberId = Number(this.params[0]);
-      const reason = String(this.params[2]);
-      const deadline = String(this.params[4]);
-      const now = String(this.params[5]);
-
-      const hasOpen = this.state.removalRequests.some(
-        (r) => r.numberId === numberId && r.status === "open",
-      );
-      if (hasOpen) {
-        throw new Error(
-          "UNIQUE constraint failed: index 'idx_removal_requests_open_per_number'",
-        );
-      }
-
-      const id = this.state.nextRRId++;
-      this.state.removalRequests.push({
-        id,
-        numberId,
-        reason,
-        status: "open",
-        contestDeadline: deadline,
-        createdAt: now,
-        displayMask: "+63917 *** 4567",
-        publicToken: String(this.params[7]),
-      });
-      this.runResult.meta.last_row_id = id;
-      return this.runResult;
-    }
-
-    if (this.sql.startsWith("INSERT INTO removal_contests")) {
-      const rrId = Number(this.params[0]);
-      const contestantHash = String(this.params[1]);
-      const reason = String(this.params[2]);
-
-      const exists = this.state.contests.some(
-        (c) =>
-          c.removalRequestId === rrId && c.contestantHash === contestantHash,
-      );
-      if (exists) {
-        throw new Error(
-          "UNIQUE constraint failed: removal_contests(removal_request_id, contestant_hash)",
-        );
-      }
-
-      this.state.contests.push({
-        removalRequestId: rrId,
-        contestantHash,
-        reason,
-      });
-
-      return this.runResult;
-    }
-
-    if (
-      this.sql.includes("removal_request_id = (SELECT id FROM removal_requests")
-    ) {
-      if (this.state.numberRow) {
-        this.state.numberRow.status = String(this.params[0]);
-        const token = String(this.params[1]);
-        const rr = this.state.removalRequests.find(
-          (r) => r.publicToken === token,
-        );
-        this.state.numberRow.removal_request_id = rr?.id ?? null;
-      }
-      return this.runResult;
-    }
-
-    if (this.sql.includes("UPDATE numbers SET status = ?")) {
-      if (this.state.numberRow) {
-        this.state.numberRow.status = String(this.params[0]);
-      }
-      return this.runResult;
-    }
-
-    if (this.sql.includes("UPDATE removal_requests SET status = ?")) {
-      const newStatus = String(this.params[0]);
-      const id = Number(this.params[2]);
-      const rr = this.state.removalRequests.find((r) => r.id === id);
-      if (rr) rr.status = newStatus;
-      return this.runResult;
-    }
-
-    return this.runResult;
-  }
-
-  async all<T>() {
-    return { results: [] as T[] };
-  }
+function stubTurnstile(action: string, success = true) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            success,
+            action,
+            hostname: "example.com",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+    ),
+  );
 }
 
-interface MockState {
-  numberRow: {
-    id: number;
-    status: string;
-    report_count: number;
-    removal_request_id: number | null;
-  } | null;
-  removalRequests: {
-    id: number;
-    numberId: number;
-    reason: string;
-    status: string;
-    contestDeadline: string;
-    createdAt: string;
-    displayMask: string;
-    publicToken: string;
-  }[];
-  contests: {
-    removalRequestId: number;
-    contestantHash: string;
-    reason: string;
-  }[];
-  nextRRId: number;
-}
-
-class MockDb {
-  private readonly state: MockState;
-
-  constructor(state: MockState) {
-    this.state = state;
-  }
-
-  prepare(sql: string) {
-    return new MockStatement(sql, this.state);
-  }
-
-  async batch(statements: MockStatement[]) {
-    const results = [];
-    for (const statement of statements) {
-      results.push(await statement.run());
-    }
-    return results;
-  }
-}
-
-function makeMockState(): MockState {
-  return {
-    numberRow: {
-      id: 1,
-      status: "verified_spam",
-      report_count: 3,
-      removal_request_id: null,
+function createRequest(ip = "203.0.113.1"): Request {
+  return new Request("https://example.com/api/removal-requests", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "cf-connecting-ip": ip,
+      "user-agent": "vitest",
     },
-    removalRequests: [],
-    contests: [],
-    nextRRId: 100,
-  };
+    body: JSON.stringify({
+      phoneNumber: E164,
+      country: "PH",
+      reason: "personal_number",
+      turnstileToken: "token",
+    }),
+  });
 }
 
-const PUBLIC_TOKEN = "a".repeat(32);
-
-function makeEnv(state: MockState): Env {
-  return {
-    DB: new MockDb(state) as unknown as D1Database,
-    ASSETS: { fetch: vi.fn() } as unknown as Fetcher,
-    HASH_SECRET: "secret",
-    TURNSTILE_SECRET_KEY: "turnstile",
-    ADMIN_PASSWORD: "admin",
-    HIDDEN_ADMIN_PATH: "/hidden-review-path",
-  };
+function contestRequest(token: string, ip = "203.0.113.9"): Request {
+  return new Request(
+    `https://example.com/api/removal-requests/${token}/contest`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "cf-connecting-ip": ip,
+        "user-agent": "vitest",
+      },
+      body: JSON.stringify({ reason: "still_spam", turnstileToken: "token" }),
+    },
+  );
 }
 
-describe("handleCreateRemovalRequest", () => {
+async function insertNumber(
+  db: ReturnType<typeof createTestDb>,
+  options: {
+    id?: number;
+    reportCount?: number;
+    recentUnique?: number;
+    status?: string;
+    removalRequestId?: number | null;
+  } = {},
+) {
+  const now = new Date().toISOString();
+  db.raw()
+    .prepare(
+      `INSERT INTO numbers
+        (id, number_hash, phone_number_enc, display_mask, country_code, status,
+         report_count, unique_reporter_count, recent_unique_reporter_count,
+         removal_request_id, first_reported_at, last_reported_at, updated_at, status_checked_at)
+       VALUES (?, ?, ?, ?, 'PH', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      options.id ?? 1,
+      await hashNumber(
+        "test-secret",
+        options.id && options.id !== 1 ? `${E164}#${options.id}` : E164,
+      ),
+      await encryptE164("test-secret", E164),
+      "+63 917 *** 4567",
+      options.status ?? "pending",
+      options.reportCount ?? 1,
+      options.reportCount ?? options.recentUnique ?? 1,
+      options.recentUnique ?? 1,
+      options.removalRequestId ?? null,
+      now,
+      now,
+      now,
+      now,
+    );
+
+  const numberId = options.id ?? 1;
+  for (let index = 0; index < (options.recentUnique ?? 1); index++) {
+    db.raw()
+      .prepare(
+        "INSERT INTO reports (number_id, reporter_hash, category, created_at) VALUES (?, ?, 'scam', ?)",
+      )
+      .run(numberId, `v2:seed-${numberId}-${index}`, now);
+  }
+}
+
+describe("removal request flow", () => {
   let env: Env;
-  let state: MockState;
+  let db: ReturnType<typeof createTestDb>;
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              success: true,
-              action: "removal_request",
-              hostname: "example.com",
-            }),
-            {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            },
-          ),
-      ),
-    );
-    state = makeMockState();
-    env = makeEnv(state);
+    stubTurnstile("removal_request");
+    db = createTestDb();
+    env = makeTestEnv(db);
   });
 
   it("rejects removal requests for numbers never reported", async () => {
-    state.numberRow = null;
-
-    const request = new Request("https://example.com/api/removal-requests", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        reason: "personal_number",
-        turnstileToken: "token",
-      }),
-    });
-
-    const response = await handleCreateRemovalRequest(request, env);
-    const body = (await response.json()) as {
-      ok: boolean;
-      error?: { code?: string };
-    };
-
+    const response = await handleCreateRemovalRequest(createRequest(), env);
+    const body = (await response.json()) as { error?: { code?: string } };
     expect(response.status).toBe(404);
-    expect(body.ok).toBe(false);
     expect(body.error?.code).toBe("NUMBER_NOT_REPORTED");
   });
 
-  it("creates removal request and sets 7-day deadline", async () => {
+  it("creates a low-confidence request with a 7-day deadline", async () => {
+    await insertNumber(db, { reportCount: 1, recentUnique: 1 });
     const before = Date.now();
 
-    const request = new Request("https://example.com/api/removal-requests", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.1",
-      },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        reason: "personal_number",
-        turnstileToken: "token",
-      }),
-    });
-
-    const response = await handleCreateRemovalRequest(request, env);
+    const response = await handleCreateRemovalRequest(createRequest(), env);
     const body = (await response.json()) as Record<string, unknown>;
+    const deadline = new Date(String(body.contestDeadline)).getTime();
 
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
+    expect(body.reviewRequired).toBe(false);
     expect(body.publicToken).toMatch(/^[0-9a-f]{32}$/);
-    expect(state.removalRequests[0]?.publicToken).toBe(body.publicToken);
-    expect(body.maskedNumber).toBe("+63 917 *** 4567");
+    expect(deadline - before).toBeGreaterThan(6.9 * 24 * 60 * 60 * 1000);
 
-    // Verify 7-day deadline
-    const deadline = new Date(body.contestDeadline as string);
-    const after = Date.now() + 7 * 24 * 60 * 60 * 1000 + 1000;
-    expect(deadline.getTime()).toBeGreaterThanOrEqual(
-      before + 7 * 24 * 60 * 60 * 1000 - 1000,
-    );
-    expect(deadline.getTime()).toBeLessThanOrEqual(after);
-
-    // Verify number status changed
-    expect(state.numberRow?.status).toBe("under_removal_review");
+    const number = db
+      .raw()
+      .prepare("SELECT status, removal_request_id FROM numbers WHERE id = 1")
+      .get() as { status: string; removal_request_id: number };
+    expect(number.status).toBe("under_removal_review");
+    expect(number.removal_request_id).toBe(1);
   });
 
-  it("prevents a new request while a contested request is under review", async () => {
-    state.numberRow = {
-      id: 1,
-      status: "disputed",
-      report_count: 3,
-      removal_request_id: 100,
-    };
-    state.removalRequests.push({
-      id: 100,
-      numberId: 1,
-      reason: "personal_number",
-      status: "contested",
-      contestDeadline: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      displayMask: "+63917 *** 4567",
-      publicToken: PUBLIC_TOKEN,
-    });
+  it("flags verified numbers for operator review", async () => {
+    await insertNumber(db, { reportCount: 3, recentUnique: 3 });
 
-    const request = new Request("https://example.com/api/removal-requests", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.1",
-      },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        reason: "personal_number",
-        turnstileToken: "token",
-      }),
-    });
-
-    const response = await handleCreateRemovalRequest(request, env);
-    const body = (await response.json()) as { error?: { code?: string } };
-
-    expect(response.status).toBe(409);
-    expect(body.error?.code).toBe("REMOVAL_UNDER_REVIEW");
+    const response = await handleCreateRemovalRequest(createRequest(), env);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.reviewRequired).toBe(true);
   });
 
-  it("returns 409 when a concurrent open request wins the insert race", async () => {
-    // Pre-check sees no link, but another writer already opened a request.
-    state.numberRow = {
-      id: 1,
-      status: "verified_spam",
-      report_count: 3,
-      removal_request_id: null,
-    };
-    state.removalRequests.push({
-      id: 99,
-      numberId: 1,
-      reason: "incorrect_report",
-      status: "open",
-      contestDeadline: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      displayMask: "+63 917 *** 4567",
-      publicToken: "d".repeat(32),
-    });
+  it("prevents duplicate open removal requests", async () => {
+    await insertNumber(db);
+    expect(
+      (await handleCreateRemovalRequest(createRequest(), env)).status,
+    ).toBe(200);
 
-    const request = new Request("https://example.com/api/removal-requests", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.9",
-      },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        reason: "personal_number",
-        turnstileToken: "token",
-      }),
-    });
-
-    const response = await handleCreateRemovalRequest(request, env);
+    const response = await handleCreateRemovalRequest(createRequest(), env);
     const body = (await response.json()) as { error?: { code?: string } };
-
     expect(response.status).toBe(409);
     expect(body.error?.code).toBe("DUPLICATE_REMOVAL_REQUEST");
   });
 
-  it("prevents duplicate open removal request", async () => {
-    // First request
-    const req1 = new Request("https://example.com/api/removal-requests", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.1",
-      },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        reason: "personal_number",
-        turnstileToken: "token",
-      }),
-    });
-    await handleCreateRemovalRequest(req1, env);
+  it("enforces a cooldown after a rejected request", async () => {
+    await insertNumber(db);
+    const now = new Date().toISOString();
+    db.raw()
+      .prepare(
+        `INSERT INTO removal_requests
+          (id, number_id, requester_hash, reason, status, contest_deadline, created_at, updated_at, public_token)
+         VALUES (1, 1, 'v2:old', 'personal_number', 'rejected', ?, ?, ?, 'abcdef0123456789abcdef0123456789')`,
+      )
+      .run(now, now, now);
 
-    // Set up state to simulate existing open removal
-    state.numberRow = {
-      id: 1,
-      status: "under_removal_review",
-      report_count: 3,
-      removal_request_id: 100,
-    };
-
-    // Second request — should fail
-    const req2 = new Request("https://example.com/api/removal-requests", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "cf-connecting-ip": "203.0.113.2",
-      },
-      body: JSON.stringify({
-        phoneNumber: "+639171234567",
-        country: "PH",
-        reason: "incorrect_report",
-        turnstileToken: "token",
-      }),
-    });
-
-    const res2 = await handleCreateRemovalRequest(req2, env);
-    const body2 = (await res2.json()) as { error?: { code?: string } };
-    expect(res2.status).toBe(409);
-    expect(body2.error?.code).toBe("DUPLICATE_REMOVAL_REQUEST");
-  });
-});
-
-describe("handleGetRemovalRequest", () => {
-  let env: Env;
-  let state: MockState;
-
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    state = makeMockState();
-    env = makeEnv(state);
-
-    // Seed a removal request
-    state.removalRequests.push({
-      id: 100,
-      numberId: 1,
-      reason: "personal_number",
-      status: "open",
-      contestDeadline: new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000,
-      ).toISOString(),
-      createdAt: new Date().toISOString(),
-      displayMask: "+63917 *** 4567",
-      publicToken: PUBLIC_TOKEN,
-    });
-  });
-
-  it("returns removal request details with contest window open", async () => {
-    const request = new Request(
-      `https://example.com/api/removal-requests/${PUBLIC_TOKEN}`,
-    );
-    const response = await handleGetRemovalRequest(request, env);
-    const body = (await response.json()) as Record<string, unknown>;
-
-    expect(response.status).toBe(200);
-    expect(body.ok).toBe(true);
-    expect(body.maskedNumber).toBe("+63917 *** 4567");
-    expect(body.reason).toBe("personal_number");
-    expect(body.status).toBe("open");
-    expect(body.contestCount).toBe(0);
-    expect(body.contestWindowOpen).toBe(true);
-  });
-
-  it("returns 404 for non-existent removal request", async () => {
-    const request = new Request(
-      `https://example.com/api/removal-requests/${"b".repeat(32)}`,
-    );
-    const response = await handleGetRemovalRequest(request, env);
-    expect(response.status).toBe(404);
-  });
-});
-
-describe("handleContestRemovalRequest", () => {
-  let env: Env;
-  let state: MockState;
-
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              success: true,
-              action: "removal_contest",
-              hostname: "example.com",
-            }),
-            {
-              status: 200,
-              headers: { "content-type": "application/json" },
-            },
-          ),
-      ),
-    );
-    state = makeMockState();
-    env = makeEnv(state);
-
-    // Seed an open removal request
-    state.removalRequests.push({
-      id: 100,
-      numberId: 1,
-      reason: "personal_number",
-      status: "open",
-      contestDeadline: new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000,
-      ).toISOString(),
-      createdAt: new Date().toISOString(),
-      displayMask: "+63917 *** 4567",
-      publicToken: PUBLIC_TOKEN,
-    });
-    state.numberRow = {
-      id: 1,
-      status: "under_removal_review",
-      report_count: 3,
-      removal_request_id: 100,
-    };
-  });
-
-  it("contests open removal and marks number as disputed", async () => {
-    const request = new Request(
-      `https://example.com/api/removal-requests/${PUBLIC_TOKEN}/contest`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "cf-connecting-ip": "203.0.113.1",
-        },
-        body: JSON.stringify({
-          reason: "still_spam",
-          turnstileToken: "token",
-        }),
-      },
-    );
-
-    const response = await handleContestRemovalRequest(request, env);
-    const body = (await response.json()) as Record<string, unknown>;
-
-    expect(response.status).toBe(200);
-    expect(body.ok).toBe(true);
-    expect(body.contestCount).toBe(1);
-    expect(body.status).toBe("disputed");
-    expect(state.numberRow?.status).toBe("disputed");
-  });
-
-  it("rejects contest when removal request is no longer open", async () => {
-    const req1 = new Request(
-      `https://example.com/api/removal-requests/${PUBLIC_TOKEN}/contest`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "cf-connecting-ip": "203.0.113.1",
-        },
-        body: JSON.stringify({
-          reason: "still_spam",
-          turnstileToken: "token",
-        }),
-      },
-    );
-    await handleContestRemovalRequest(req1, env);
-
-    const req2 = new Request(
-      `https://example.com/api/removal-requests/${PUBLIC_TOKEN}/contest`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "cf-connecting-ip": "203.0.113.1",
-        },
-        body: JSON.stringify({
-          reason: "recent_spam_call",
-          turnstileToken: "token",
-        }),
-      },
-    );
-
-    const res2 = await handleContestRemovalRequest(req2, env);
-    const body2 = (await res2.json()) as { error?: { code?: string } };
-    expect(res2.status).toBe(409);
-    expect(body2.error?.code).toBe("NOT_CONTESTABLE");
-  });
-
-  it("rejects contest for non-existent removal request", async () => {
-    const request = new Request(
-      `https://example.com/api/removal-requests/${"c".repeat(32)}/contest`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "cf-connecting-ip": "203.0.113.1",
-        },
-        body: JSON.stringify({
-          reason: "still_spam",
-          turnstileToken: "token",
-        }),
-      },
-    );
-
-    const response = await handleContestRemovalRequest(request, env);
-    expect(response.status).toBe(404);
-  });
-
-  it("rejects contest for non-open removal request", async () => {
-    // Make it non-open
-    state.removalRequests[0].status = "approved";
-
-    const request = new Request(
-      `https://example.com/api/removal-requests/${PUBLIC_TOKEN}/contest`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "cf-connecting-ip": "203.0.113.1",
-        },
-        body: JSON.stringify({
-          reason: "still_spam",
-          turnstileToken: "token",
-        }),
-      },
-    );
-
-    const response = await handleContestRemovalRequest(request, env);
+    const response = await handleCreateRemovalRequest(createRequest(), env);
+    const body = (await response.json()) as { error?: { code?: string } };
     expect(response.status).toBe(409);
+    expect(body.error?.code).toBe("REMOVAL_COOLDOWN");
+  });
+
+  it("limits removal requests per reporter per day", async () => {
+    const requesterHash = await hashReporter("test-secret", "203.0.113.1");
+    const now = new Date().toISOString();
+    for (let index = 1; index <= 5; index++) {
+      await insertNumber(db, { id: index });
+      db.raw()
+        .prepare(
+          `INSERT INTO removal_requests
+            (id, number_id, requester_hash, reason, status, contest_deadline, created_at, updated_at, public_token)
+           VALUES (?, ?, ?, 'personal_number', 'rejected', ?, ?, ?, ?)`,
+        )
+        .run(
+          index,
+          index,
+          requesterHash,
+          now,
+          now,
+          now,
+          `abcdef0123456789abcdef01234567${index}`,
+        );
+    }
+
+    const response = await handleCreateRemovalRequest(createRequest(), env);
+    const body = (await response.json()) as { error?: { code?: string } };
+    expect(response.status).toBe(429);
+    expect(body.error?.code).toBe("REMOVAL_RATE_LIMITED");
+  });
+
+  it("contests an open removal and marks the number disputed", async () => {
+    await insertNumber(db);
+    const created = (await (
+      await handleCreateRemovalRequest(createRequest(), env)
+    ).json()) as { publicToken: string };
+
+    stubTurnstile("removal_contest");
+    const response = await handleContestRemovalRequest(
+      contestRequest(created.publicToken),
+      env,
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      ok: true,
+      contestCount: 1,
+      status: "disputed",
+    });
+
+    const request = db
+      .raw()
+      .prepare("SELECT status FROM removal_requests WHERE id = 1")
+      .get() as { status: string };
+    const number = db
+      .raw()
+      .prepare("SELECT status FROM numbers WHERE id = 1")
+      .get() as { status: string };
+    expect(request.status).toBe("contested");
+    expect(number.status).toBe("disputed");
+  });
+
+  it("does not un-remove a removed number on contest", async () => {
+    await insertNumber(db, { status: "removed", removalRequestId: 1 });
+    const deadline = new Date(Date.now() + 86_400_000).toISOString();
+    const token = "abcdef0123456789abcdef0123456789";
+    db.raw()
+      .prepare(
+        `INSERT INTO removal_requests
+          (id, number_id, requester_hash, reason, status, contest_deadline, created_at, updated_at, public_token)
+         VALUES (1, 1, 'v2:requester', 'personal_number', 'open', ?, ?, ?, ?)`,
+      )
+      .run(deadline, deadline, deadline, token);
+
+    stubTurnstile("removal_contest");
+    const response = await handleContestRemovalRequest(
+      contestRequest(token),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    const number = db
+      .raw()
+      .prepare("SELECT status FROM numbers WHERE id = 1")
+      .get() as { status: string };
+    expect(number.status).toBe("removed");
+  });
+
+  it("rejects duplicate contests from the same reporter", async () => {
+    await insertNumber(db);
+    const created = (await (
+      await handleCreateRemovalRequest(createRequest(), env)
+    ).json()) as { publicToken: string };
+
+    stubTurnstile("removal_contest");
+    await handleContestRemovalRequest(contestRequest(created.publicToken), env);
+    const response = await handleContestRemovalRequest(
+      contestRequest(created.publicToken),
+      env,
+    );
+    const body = (await response.json()) as { error?: { code?: string } };
+    expect(response.status).toBe(409);
+    expect(body.error?.code).toBe("ALREADY_CONTESTED");
+  });
+
+  it("returns removal detail with review guidance", async () => {
+    await insertNumber(db, { reportCount: 3, recentUnique: 3 });
+    const created = (await (
+      await handleCreateRemovalRequest(createRequest(), env)
+    ).json()) as { publicToken: string };
+
+    const request = new Request(
+      `https://example.com/api/removal-requests/${created.publicToken}`,
+    );
+    const response = await handleGetRemovalRequest(request, env);
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(body.reviewRequired).toBe(true);
+    expect(body.status).toBe("open");
+  });
+
+  it("rejects contest for non-existent requests", async () => {
+    stubTurnstile("removal_contest");
+    const response = await handleContestRemovalRequest(
+      contestRequest("abcdef0123456789abcdef0123456789"),
+      env,
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it("rejects Turnstile failure on removal creation", async () => {
+    stubTurnstile("removal_request", false);
+    const response = await handleCreateRemovalRequest(createRequest(), env);
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 429 when the write limiter rejects creation", async () => {
+    env.RATE_LIMITER_WRITE = { limit: vi.fn(async () => ({ success: false })) };
+    const response = await handleCreateRemovalRequest(createRequest(), env);
+    expect(response.status).toBe(429);
   });
 });

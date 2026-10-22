@@ -5,7 +5,7 @@ import { defineConfig, loadEnv } from "vite";
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, __dirname, "");
+  const env = loadEnv(mode, import.meta.dirname, "");
   const apiProxyTarget =
     env.VITE_API_PROXY_TARGET?.trim() || "http://127.0.0.1:8787";
 
@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), babel({ presets: [reactCompilerPreset()] })],
     resolve: {
       alias: {
-        "@": path.resolve(__dirname, "./src"),
+        "@": path.resolve(import.meta.dirname, "./src"),
       },
     },
     server: {

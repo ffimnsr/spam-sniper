@@ -1,650 +1,437 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   buildAdminResolveApiPath,
   getAdminExportApiPath,
-  getAdminLoginApiPath,
+  getAdminRemovalRequestsApiPath,
   getAdminSummaryApiPath,
 } from "../../shared/admin-paths.ts";
-import { createAdminToken } from "../lib/admin-auth.ts";
 import { encryptE164 } from "../lib/encryption.ts";
+import { hashNumber } from "../lib/hash.ts";
+import { accessHeaders, createTestDb, makeTestEnv } from "../test/sqlite-d1.ts";
 import type { Env } from "../types.ts";
 import {
   handleAdminExport,
-  handleAdminLogin,
+  handleAdminRemovalRequests,
   handleAdminResolve,
   handleAdminSummary,
 } from "./admin.ts";
 
-function mockTurnstileResponse(success: boolean) {
-  return new Response(
-    JSON.stringify({ success, action: "admin_login", hostname: "example.com" }),
-    {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    },
-  );
-}
+const ADMIN_PATH = "/f4c9";
+const NOW = new Date().toISOString();
+const PAST = new Date(Date.now() - 60_000).toISOString();
 
-const hiddenAdminPath = "/intake/review/queue/manual/escalations/window/f4c9";
-
-class MockStatement {
-  private readonly sql: string;
-  private readonly state: {
-    removalRequest: { id: number; numberId: number; status: string };
-    number: { id: number; status: string; removalRequestId: number | null };
-    uniqueReporters: number;
-    exportRows: Array<{
-      id: number;
-      phone_number_e164: string | null;
-      phone_number_enc?: string | null;
-      display_mask: string;
-      country_code: string | null;
-      report_count: number;
-      unique_reporter_count: number;
-      first_reported_at: string;
-      last_reported_at: string;
-    }>;
+function adminRequest(
+  path: string,
+  options: { method?: string; body?: unknown; access?: boolean } = {},
+): Request {
+  const headers: Record<string, string> = {
+    ...(options.access === false ? {} : accessHeaders()),
   };
-
-  constructor(
-    sql: string,
-    state: {
-      removalRequest: { id: number; numberId: number; status: string };
-      number: { id: number; status: string; removalRequestId: number | null };
-      uniqueReporters: number;
-      exportRows: Array<{
-        id: number;
-        phone_number_e164: string | null;
-        phone_number_enc?: string | null;
-        display_mask: string;
-        country_code: string | null;
-        report_count: number;
-        unique_reporter_count: number;
-        first_reported_at: string;
-        last_reported_at: string;
-      }>;
-    },
-  ) {
-    this.sql = sql;
-    this.state = state;
+  if (options.body !== undefined) {
+    headers["content-type"] = "application/json";
   }
 
-  private params: unknown[] = [];
-
-  bind(...params: unknown[]) {
-    this.params = params;
-    return this;
-  }
-
-  async first<T>() {
-    if (this.sql.includes("AS total") && this.sql.includes("FROM numbers")) {
-      return {
-        total: 5,
-        pending: 2,
-        suspected: 1,
-        verified_spam: 1,
-        under_removal_review: 1,
-        disputed: 0,
-        removed: 0,
-        open_removal_requests: 2,
-        contested_removal_requests: 1,
-      } as T;
-    }
-
-    if (
-      this.sql.includes("SELECT id, number_id, status FROM removal_requests")
-    ) {
-      return {
-        id: this.state.removalRequest.id,
-        number_id: this.state.removalRequest.numberId,
-        status: this.state.removalRequest.status,
-      } as T;
-    }
-
-    if (
-      this.sql.includes(
-        "SELECT COUNT(DISTINCT reporter_hash) as unique FROM reports",
-      )
-    ) {
-      return { unique: this.state.uniqueReporters } as T;
-    }
-
-    if (this.sql.includes("SELECT category, COUNT(*) as cnt")) {
-      return { category: "bank_scam", cnt: 3 } as T;
-    }
-
-    if (this.sql.includes("FROM numbers WHERE status = ?")) {
-      const status = String(this.params[0]);
-      const counts: Record<string, number> = {
-        pending: 2,
-        suspected: 1,
-        verified_spam: 1,
-        under_removal_review: 1,
-        disputed: 0,
-        removed: 0,
-      };
-      return { count: counts[status] ?? 0 } as T;
-    }
-
-    if (this.sql.includes("FROM removal_requests WHERE status = ?")) {
-      const status = String(this.params[0]);
-      const counts: Record<string, number> = {
-        open: 2,
-        contested: 1,
-      };
-      return { count: counts[status] ?? 0 } as T;
-    }
-
-    if (this.sql.includes("SELECT COUNT(*) as count FROM numbers")) {
-      return { count: 5 } as T;
-    }
-
-    return null as T;
-  }
-
-  async run() {
-    if (this.sql.includes("UPDATE removal_requests SET status = ?")) {
-      this.state.removalRequest.status = String(this.params[0]);
-      return { meta: {} };
-    }
-
-    if (
-      this.sql.includes(
-        "UPDATE numbers SET status = ?, removal_request_id = NULL",
-      )
-    ) {
-      this.state.number.status = String(this.params[0]);
-      this.state.number.removalRequestId = null;
-      return { meta: {} };
-    }
-
-    if (this.sql.includes("UPDATE numbers SET status = ?, updated_at = ?")) {
-      this.state.number.status = String(this.params[0]);
-      return { meta: {} };
-    }
-
-    return { meta: {} };
-  }
-
-  async all<T>(): Promise<{ results: T[] }> {
-    if (this.sql.includes("WHERE n.status = 'verified_spam'")) {
-      return {
-        results: this.state.exportRows.map((row) => ({
-          ...row,
-          top_category: "bank_scam",
-        })) as T[],
-      };
-    }
-
-    return { results: [] as T[] };
-  }
+  return new Request(`https://example.com${path}`, {
+    method: options.method ?? "GET",
+    headers,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
 }
 
-class MockDb {
-  private readonly state: {
-    removalRequest: { id: number; numberId: number; status: string };
-    number: { id: number; status: string; removalRequestId: number | null };
-    uniqueReporters: number;
-    exportRows: Array<{
-      id: number;
-      phone_number_e164: string | null;
-      phone_number_enc?: string | null;
-      display_mask: string;
-      country_code: string | null;
-      report_count: number;
-      unique_reporter_count: number;
-      first_reported_at: string;
-      last_reported_at: string;
-    }>;
-  };
-
-  constructor(state: {
-    removalRequest: { id: number; numberId: number; status: string };
-    number: { id: number; status: string; removalRequestId: number | null };
-    uniqueReporters: number;
-    exportRows: Array<{
-      id: number;
-      phone_number_e164: string | null;
-      phone_number_enc?: string | null;
-      display_mask: string;
-      country_code: string | null;
-      report_count: number;
-      unique_reporter_count: number;
-      first_reported_at: string;
-      last_reported_at: string;
-    }>;
-  }) {
-    this.state = state;
-  }
-
-  prepare(sql: string) {
-    return new MockStatement(sql, this.state);
-  }
-
-  async batch(statements: MockStatement[]) {
-    const results = [];
-    for (const statement of statements) {
-      results.push(await statement.run());
-    }
-    return results;
-  }
+async function insertNumber(
+  db: ReturnType<typeof createTestDb>,
+  options: {
+    id: number;
+    status?: string;
+    recentUnique?: number;
+    uniqueReporters?: number;
+    removalRequestId?: number | null;
+  },
+) {
+  const numberHash = await hashNumber("test-secret", `+1555000${options.id}`);
+  const encrypted = await encryptE164("test-secret", `+1555000${options.id}`);
+  db.raw()
+    .prepare(
+      `INSERT INTO numbers
+        (id, number_hash, phone_number_enc, display_mask, country_code, status,
+         report_count, unique_reporter_count, recent_unique_reporter_count,
+         removal_request_id, first_reported_at, last_reported_at, updated_at, status_checked_at)
+       VALUES (?, ?, ?, ?, 'US', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      options.id,
+      numberHash,
+      encrypted,
+      `+1 555 *** 000${options.id}`,
+      options.status ?? "pending",
+      options.uniqueReporters ?? options.recentUnique ?? 1,
+      options.uniqueReporters ?? options.recentUnique ?? 1,
+      options.recentUnique ?? 1,
+      options.removalRequestId ?? null,
+      NOW,
+      NOW,
+      NOW,
+      NOW,
+    );
 }
 
-describe("handleAdminResolve", () => {
+function insertRequest(
+  db: ReturnType<typeof createTestDb>,
+  options: {
+    id: number;
+    numberId: number;
+    status?: string;
+    deadline?: string;
+    reason?: string;
+  },
+) {
+  db.raw()
+    .prepare(
+      `INSERT INTO removal_requests
+        (id, number_id, requester_hash, reason, status, contest_deadline, created_at, updated_at, public_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      options.id,
+      options.numberId,
+      "v2:requester",
+      options.reason ?? "personal_number",
+      options.status ?? "open",
+      options.deadline ?? PAST,
+      NOW,
+      NOW,
+      `abcdef0123456789abcdef01234567${options.id}`,
+    );
+}
+
+describe("admin API with Cloudflare Access", () => {
   let env: Env;
-  let adminToken: string;
-  let state: {
-    removalRequest: { id: number; numberId: number; status: string };
-    number: { id: number; status: string; removalRequestId: number | null };
-    uniqueReporters: number;
-    exportRows: Array<{
-      id: number;
-      phone_number_e164: string | null;
-      phone_number_enc?: string | null;
-      display_mask: string;
-      country_code: string | null;
-      report_count: number;
-      unique_reporter_count: number;
-      first_reported_at: string;
-      last_reported_at: string;
-    }>;
-  };
+  let db: ReturnType<typeof createTestDb>;
 
-  beforeEach(async () => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(mockTurnstileResponse(true)),
+  beforeEach(() => {
+    db = createTestDb();
+    env = makeTestEnv(db);
+  });
+
+  it("rejects requests without Access headers", async () => {
+    const response = await handleAdminSummary(
+      adminRequest(getAdminSummaryApiPath(ADMIN_PATH), { access: false }),
+      env,
     );
-    adminToken = (await createAdminToken("secret")).token;
-    state = {
-      removalRequest: { id: 7, numberId: 11, status: "open" },
-      number: { id: 11, status: "under_removal_review", removalRequestId: 7 },
+    expect(response.status).toBe(401);
+  });
+
+  it("returns summary counts and maintenance state", async () => {
+    await insertNumber(db, { id: 1, status: "pending" });
+    await insertNumber(db, {
+      id: 2,
+      status: "verified_spam",
+      recentUnique: 3,
       uniqueReporters: 3,
-      exportRows: [
-        {
-          id: 11,
-          phone_number_e164: "+15551234567",
-          display_mask: "+1555 *** 4567",
-          country_code: "US",
-          report_count: 4,
-          unique_reporter_count: 3,
-          first_reported_at: "2026-05-01T00:00:00.000Z",
-          last_reported_at: "2026-05-02T00:00:00.000Z",
-        },
-      ],
-    };
-
-    env = {
-      DB: new MockDb(state) as unknown as D1Database,
-      ASSETS: { fetch: vi.fn() } as unknown as Fetcher,
-      HASH_SECRET: "secret",
-      TURNSTILE_SECRET_KEY: "turnstile",
-      ADMIN_PASSWORD: "admin",
-      HIDDEN_ADMIN_PATH: hiddenAdminPath,
-    };
-  });
-
-  it("approves removal", async () => {
-    const request = new Request(
-      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ action: "approve_removal" }),
-      },
-    );
-
-    const response = await handleAdminResolve(request, env);
-
-    expect(response.status).toBe(200);
-    expect(state.removalRequest.status).toBe("approved");
-    expect(state.number.status).toBe("removed");
-    expect(state.number.removalRequestId).toBeNull();
-  });
-
-  it("rejects removal and recomputes number status", async () => {
-    state.uniqueReporters = 3;
-
-    const request = new Request(
-      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ action: "reject_removal" }),
-      },
-    );
-
-    const response = await handleAdminResolve(request, env);
-
-    expect(response.status).toBe(200);
-    expect(state.removalRequest.status).toBe("rejected");
-    expect(state.number.status).toBe("verified_spam");
-    expect(state.number.removalRequestId).toBeNull();
-  });
-
-  it("marks as disputed", async () => {
-    const request = new Request(
-      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ action: "mark_disputed" }),
-      },
-    );
-
-    const response = await handleAdminResolve(request, env);
-
-    expect(response.status).toBe(200);
-    expect(state.removalRequest.status).toBe("contested");
-    expect(state.number.status).toBe("disputed");
-  });
-
-  it("rejects request without admin auth", async () => {
-    const request = new Request(
-      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "approve_removal" }),
-      },
-    );
-
-    const response = await handleAdminResolve(request, env);
-    expect(response.status).toBe(401);
-  });
-
-  it("rejects invalid action", async () => {
-    const request = new Request(
-      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ action: "delete_everything" }),
-      },
-    );
-
-    const response = await handleAdminResolve(request, env);
-    expect(response.status).toBe(400);
-  });
-
-  it("rejects approve on a rejected removal request", async () => {
-    state.removalRequest.status = "rejected";
-
-    const request = new Request(
-      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ action: "approve_removal" }),
-      },
-    );
-
-    const response = await handleAdminResolve(request, env);
-    const body = (await response.json()) as { error?: { code?: string } };
-
-    expect(response.status).toBe(409);
-    expect(body.error?.code).toBe("INVALID_STATE");
-    expect(state.removalRequest.status).toBe("rejected");
-  });
-
-  it("rejects mark_disputed on an approved removal request", async () => {
-    state.removalRequest.status = "approved";
-
-    const request = new Request(
-      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ action: "mark_disputed" }),
-      },
-    );
-
-    const response = await handleAdminResolve(request, env);
-    expect(response.status).toBe(409);
-    expect(state.number.status).toBe("under_removal_review");
-  });
-
-  it("rejects the raw admin password as a bearer token", async () => {
-    const request = new Request(
-      `https://example.com${buildAdminResolveApiPath(hiddenAdminPath, 7)}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer admin-password",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ action: "approve_removal" }),
-      },
-    );
-
-    const response = await handleAdminResolve(request, env);
-    expect(response.status).toBe(401);
-  });
-});
-
-describe("handleAdminSummary", () => {
-  let env: Env;
-  let adminToken: string;
-  let state: {
-    removalRequest: { id: number; numberId: number; status: string };
-    number: { id: number; status: string; removalRequestId: number | null };
-    uniqueReporters: number;
-    exportRows: Array<{
-      id: number;
-      phone_number_e164: string | null;
-      phone_number_enc?: string | null;
-      display_mask: string;
-      country_code: string | null;
-      report_count: number;
-      unique_reporter_count: number;
-      first_reported_at: string;
-      last_reported_at: string;
-    }>;
-  };
-
-  beforeEach(async () => {
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(mockTurnstileResponse(true)),
-    );
-    adminToken = (await createAdminToken("secret")).token;
-    state = {
-      removalRequest: { id: 7, numberId: 11, status: "open" },
-      number: { id: 11, status: "under_removal_review", removalRequestId: 7 },
-      uniqueReporters: 3,
-      exportRows: [
-        {
-          id: 11,
-          phone_number_e164: "+15551234567",
-          display_mask: "+1555 *** 4567",
-          country_code: "US",
-          report_count: 4,
-          unique_reporter_count: 3,
-          first_reported_at: "2026-05-01T00:00:00.000Z",
-          last_reported_at: "2026-05-02T00:00:00.000Z",
-        },
-      ],
-    };
-
-    env = {
-      DB: new MockDb(state) as unknown as D1Database,
-      ASSETS: { fetch: vi.fn() } as unknown as Fetcher,
-      HASH_SECRET: "secret",
-      TURNSTILE_SECRET_KEY: "turnstile",
-      ADMIN_PASSWORD: "admin",
-      HIDDEN_ADMIN_PATH: hiddenAdminPath,
-    };
-  });
-
-  it("returns summary counts", async () => {
-    const request = new Request(
-      `https://example.com${getAdminSummaryApiPath(hiddenAdminPath)}`,
-      {
-        headers: { Authorization: `Bearer ${adminToken}` },
-      },
-    );
-
-    const response = await handleAdminSummary(request, env);
-    const body = (await response.json()) as Record<string, unknown>;
-
-    expect(response.status).toBe(200);
-    expect(body.totalNumbers).toBe(5);
-    expect(body.pending).toBe(2);
-    expect(body.suspected).toBe(1);
-    expect(body.verifiedSpam).toBe(1);
-    expect(body.underRemovalReview).toBe(1);
-    expect(body.disputed).toBe(0);
-    expect(body.removed).toBe(0);
-    expect(body.openRemovalRequests).toBe(2);
-    expect(body.contestedRemovalRequests).toBe(1);
-  });
-
-  it("rejects request without admin auth", async () => {
-    const request = new Request(
-      `https://example.com${getAdminSummaryApiPath(hiddenAdminPath)}`,
-    );
-    const response = await handleAdminSummary(request, env);
-    expect(response.status).toBe(401);
-  });
-
-  it("exports full phone number plus masked display", async () => {
-    const request = new Request(
-      `https://example.com${getAdminExportApiPath(hiddenAdminPath)}`,
-      {
-        headers: { Authorization: `Bearer ${adminToken}` },
-      },
-    );
-
-    const response = await handleAdminExport(request, env);
-    const body = (await response.json()) as {
-      ok: boolean;
-      entries: Array<Record<string, unknown>>;
-    };
-
-    expect(response.status).toBe(200);
-    expect(body.ok).toBe(true);
-    expect(body.entries).toHaveLength(1);
-    expect(body.entries[0]?.phone_number_e164).toBe("+15551234567");
-    expect(body.entries[0]?.display_mask).toBe("+1555 *** 4567");
-    expect(body.entries[0]?.category).toBe("bank scam");
-  });
-
-  it("decrypts encrypted E.164 values in the export", async () => {
-    state.exportRows[0] = {
-      ...state.exportRows[0],
-      phone_number_e164: null,
-      phone_number_enc: await encryptE164("secret", "+15551234567"),
-    };
-
-    const request = new Request(
-      `https://example.com${getAdminExportApiPath(hiddenAdminPath)}`,
-      {
-        headers: { Authorization: `Bearer ${adminToken}` },
-      },
-    );
-
-    const response = await handleAdminExport(request, env);
-    const body = (await response.json()) as {
-      entries: Array<Record<string, unknown>>;
-    };
-
-    expect(response.status).toBe(200);
-    expect(body.entries[0]?.phone_number_e164).toBe("+15551234567");
-  });
-
-  it("allows admin login with Turnstile and returns bootstrap data", async () => {
-    const request = new Request(
-      `https://example.com${getAdminLoginApiPath(hiddenAdminPath)}`,
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          password: "admin",
-          turnstileToken: "token",
-        }),
-      },
-    );
-
-    const response = await handleAdminLogin(request, env);
-    const body = (await response.json()) as Record<string, unknown>;
-
-    expect(response.status).toBe(200);
-    expect(body.ok).toBe(true);
-    expect(typeof body.token).toBe("string");
-    expect(typeof body.expiresAt).toBe("string");
-    expect(body.summary).toMatchObject({
-      totalNumbers: 5,
-      openRemovalRequests: 2,
+      removalRequestId: 7,
     });
-    expect(body.requests).toEqual([]);
+    insertRequest(db, { id: 7, numberId: 2, status: "pending_review" });
+    db.raw()
+      .prepare(
+        "INSERT INTO system_state (key, value, updated_at) VALUES ('finalizer_last_run', '2026-10-01T00:00:00.000Z', ?)",
+      )
+      .run(NOW);
+
+    const response = await handleAdminSummary(
+      adminRequest(getAdminSummaryApiPath(ADMIN_PATH)),
+      env,
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      totalNumbers: 2,
+      pending: 1,
+      verifiedSpam: 1,
+      pendingReviewRemovalRequests: 1,
+      openRemovalRequests: 0,
+    });
+    expect(body.maintenance).toEqual({
+      finalizer_last_run: "2026-10-01T00:00:00.000Z",
+    });
+    expect(body.recentAudit).toEqual([]);
   });
 
-  it("verifies Turnstile before checking the password", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(mockTurnstileResponse(false)),
-    );
+  it("approves removal and keeps the audit trail", async () => {
+    await insertNumber(db, {
+      id: 11,
+      status: "under_removal_review",
+      recentUnique: 1,
+      removalRequestId: 7,
+    });
+    insertRequest(db, { id: 7, numberId: 11, status: "open" });
 
-    const request = new Request(
-      `https://example.com${getAdminLoginApiPath(hiddenAdminPath)}`,
-      {
+    const response = await handleAdminResolve(
+      adminRequest(buildAdminResolveApiPath(ADMIN_PATH, 7), {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          password: "wrong-password",
-          turnstileToken: "bad-token",
-        }),
-      },
+        body: { action: "approve_removal" },
+      }),
+      env,
     );
 
-    const response = await handleAdminLogin(request, env);
-    const body = (await response.json()) as { error?: { code?: string } };
+    expect(response.status).toBe(200);
+    const request = db
+      .raw()
+      .prepare("SELECT status FROM removal_requests WHERE id = 7")
+      .get() as { status: string };
+    const number = db
+      .raw()
+      .prepare("SELECT status, removal_request_id FROM numbers WHERE id = 11")
+      .get() as { status: string; removal_request_id: number };
+    const audit = db
+      .raw()
+      .prepare("SELECT actor, action FROM admin_audit_log")
+      .get() as { actor: string; action: string };
 
-    expect(response.status).toBe(400);
-    expect(body.error?.code).toBe("TURNSTILE_FAILED");
+    expect(request.status).toBe("approved");
+    expect(number.status).toBe("removed");
+    expect(number.removal_request_id).toBe(7);
+    expect(audit).toEqual({
+      actor: "operator@example.com",
+      action: "approve_removal",
+    });
   });
 
-  it("rejects admin login when Turnstile fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(mockTurnstileResponse(false)),
-    );
+  it("rejects removal and recomputes status from recent reports", async () => {
+    await insertNumber(db, {
+      id: 11,
+      status: "under_removal_review",
+      recentUnique: 3,
+      uniqueReporters: 4,
+      removalRequestId: 7,
+    });
+    insertRequest(db, { id: 7, numberId: 11, status: "pending_review" });
+    for (let reporter = 0; reporter < 3; reporter++) {
+      db.raw()
+        .prepare(
+          "INSERT INTO reports (number_id, reporter_hash, category, created_at) VALUES (11, ?, 'scam', ?)",
+        )
+        .run(`v2:reject-${reporter}`, NOW);
+    }
 
-    const request = new Request(
-      `https://example.com${getAdminLoginApiPath(hiddenAdminPath)}`,
-      {
+    const response = await handleAdminResolve(
+      adminRequest(buildAdminResolveApiPath(ADMIN_PATH, 7), {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          password: "admin",
-          turnstileToken: "bad-token",
-        }),
-      },
+        body: { action: "reject_removal" },
+      }),
+      env,
     );
 
-    const response = await handleAdminLogin(request, env);
+    expect(response.status).toBe(200);
+    const number = db
+      .raw()
+      .prepare("SELECT status, removal_request_id FROM numbers WHERE id = 11")
+      .get() as { status: string; removal_request_id: number | null };
+    expect(number.status).toBe("verified_spam");
+    expect(number.removal_request_id).toBeNull();
+  });
+
+  it("does not un-remove a legacy removed number on rejection", async () => {
+    await insertNumber(db, {
+      id: 11,
+      status: "removed",
+      recentUnique: 1,
+      removalRequestId: 7,
+    });
+    insertRequest(db, { id: 7, numberId: 11, status: "pending_review" });
+
+    const response = await handleAdminResolve(
+      adminRequest(buildAdminResolveApiPath(ADMIN_PATH, 7), {
+        method: "POST",
+        body: { action: "reject_removal" },
+      }),
+      env,
+    );
+    const body = (await response.json()) as { numberStatus: string };
+
+    expect(response.status).toBe(200);
+    expect(body.numberStatus).toBe("removed");
+    const number = db
+      .raw()
+      .prepare("SELECT status FROM numbers WHERE id = 11")
+      .get() as { status: string };
+    expect(number.status).toBe("removed");
+  });
+
+  it("marks a request disputed", async () => {
+    await insertNumber(db, {
+      id: 11,
+      status: "under_removal_review",
+      removalRequestId: 7,
+    });
+    insertRequest(db, { id: 7, numberId: 11, status: "open" });
+
+    const response = await handleAdminResolve(
+      adminRequest(buildAdminResolveApiPath(ADMIN_PATH, 7), {
+        method: "POST",
+        body: { action: "mark_disputed" },
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    const number = db
+      .raw()
+      .prepare("SELECT status FROM numbers WHERE id = 11")
+      .get() as { status: string };
+    expect(number.status).toBe("disputed");
+  });
+
+  it("rejects invalid state transitions", async () => {
+    await insertNumber(db, {
+      id: 11,
+      status: "under_removal_review",
+      removalRequestId: 7,
+    });
+    insertRequest(db, { id: 7, numberId: 11, status: "approved" });
+
+    const response = await handleAdminResolve(
+      adminRequest(buildAdminResolveApiPath(ADMIN_PATH, 7), {
+        method: "POST",
+        body: { action: "mark_disputed" },
+      }),
+      env,
+    );
+    expect(response.status).toBe(409);
+  });
+
+  it("lists pending review requests with contest reasons", async () => {
+    await insertNumber(db, {
+      id: 11,
+      status: "under_removal_review",
+      removalRequestId: 7,
+    });
+    insertRequest(db, { id: 7, numberId: 11, status: "pending_review" });
+    db.raw()
+      .prepare(
+        "INSERT INTO removal_contests (removal_request_id, contestant_hash, reason, created_at) VALUES (7, 'v2:a', 'still_spam', ?), (7, 'v2:b', 'known_scam_number', ?)",
+      )
+      .run(NOW, NOW);
+
+    const response = await handleAdminRemovalRequests(
+      adminRequest(
+        `${getAdminRemovalRequestsApiPath(ADMIN_PATH)}?status=pending_review`,
+      ),
+      env,
+    );
+    const body = (await response.json()) as {
+      requests: Array<{ contest_reasons: string; contest_count: number }>;
+      total: number;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.total).toBe(1);
+    expect(body.requests[0]?.contest_count).toBe(2);
+    expect(body.requests[0]?.contest_reasons).toContain("still_spam");
+  });
+
+  it("paginates and decrypts the verified export", async () => {
+    for (const id of [1, 2]) {
+      await insertNumber(db, {
+        id,
+        status: "verified_spam",
+        recentUnique: 3,
+        uniqueReporters: 3,
+      });
+      for (let reporter = 0; reporter < 3; reporter++) {
+        db.raw()
+          .prepare(
+            "INSERT INTO reports (number_id, reporter_hash, category, created_at) VALUES (?, ?, 'bank_scam', ?)",
+          )
+          .run(id, `v2:reporter-${id}-${reporter}`, NOW);
+      }
+    }
+
+    const first = await handleAdminExport(
+      adminRequest(`${getAdminExportApiPath(ADMIN_PATH)}?limit=1&offset=0`),
+      env,
+    );
+    const firstBody = (await first.json()) as {
+      total_entries: number;
+      has_more: boolean;
+      next_offset: number | null;
+      entries: Array<{ phone_number_e164: string; category: string }>;
+    };
+
+    expect(first.status).toBe(200);
+    expect(firstBody.total_entries).toBe(2);
+    expect(firstBody.entries).toHaveLength(1);
+    expect(firstBody.has_more).toBe(true);
+    expect(firstBody.next_offset).toBe(1);
+    expect(firstBody.entries[0]?.phone_number_e164).toMatch(/^\+1555/);
+    expect(firstBody.entries[0]?.category).toBe("bank scam");
+
+    const second = await handleAdminExport(
+      adminRequest(`${getAdminExportApiPath(ADMIN_PATH)}?limit=1&offset=1`),
+      env,
+    );
+    const secondBody = (await second.json()) as {
+      has_more: boolean;
+      entries: Array<{ phone_number_e164: string }>;
+    };
+    expect(secondBody.has_more).toBe(false);
+    expect(secondBody.entries).toHaveLength(1);
+    expect(secondBody.entries[0]?.phone_number_e164).not.toBe(
+      firstBody.entries[0]?.phone_number_e164,
+    );
+
+    const auditCount = db
+      .raw()
+      .prepare(
+        "SELECT COUNT(*) AS count FROM admin_audit_log WHERE action = 'export_verified_spam'",
+      )
+      .get() as { count: number };
+    expect(auditCount.count).toBe(2);
+  });
+
+  it("skips rows that cannot be decrypted instead of exporting the mask", async () => {
+    await insertNumber(db, {
+      id: 3,
+      status: "verified_spam",
+      recentUnique: 3,
+      uniqueReporters: 3,
+    });
+    for (let reporter = 0; reporter < 3; reporter++) {
+      db.raw()
+        .prepare(
+          "INSERT INTO reports (number_id, reporter_hash, category, created_at) VALUES (3, ?, 'scam', ?)",
+        )
+        .run(`v2:skip-${reporter}`, NOW);
+    }
+    db.raw()
+      .prepare(
+        "UPDATE numbers SET phone_number_enc = 'v1.bad.bad', phone_number_e164 = NULL WHERE id = 3",
+      )
+      .run();
+
+    const response = await handleAdminExport(
+      adminRequest(getAdminExportApiPath(ADMIN_PATH)),
+      env,
+    );
+    const body = (await response.json()) as {
+      total_entries: number;
+      returned_entries: number;
+      skipped_entries: number;
+      entries: unknown[];
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.total_entries).toBe(1);
+    expect(body.returned_entries).toBe(0);
+    expect(body.skipped_entries).toBe(1);
+    expect(body.entries).toEqual([]);
+  });
+
+  it("rejects invalid export query parameters", async () => {
+    const response = await handleAdminExport(
+      adminRequest(`${getAdminExportApiPath(ADMIN_PATH)}?limit=5000`),
+      env,
+    );
     expect(response.status).toBe(400);
   });
 });

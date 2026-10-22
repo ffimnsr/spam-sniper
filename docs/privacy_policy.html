@@ -4,11 +4,36 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#03080c">
+  <meta name="description" content="What SpamSniper and the Triage Terminal process, what they do not collect, and how privacy boundaries are enforced.">
   <title>Privacy Policy // SPAM SNIPER DOCS</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="preload" href="assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/space-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <style>
+    @font-face {
+      font-family: "Inter";
+      font-style: normal;
+      font-display: swap;
+      font-weight: 100 900;
+      src: url("assets/fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+    }
+
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-display: swap;
+      font-weight: 100 800;
+      src: url("assets/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+    }
+
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-display: swap;
+      font-weight: 300 700;
+      src: url("assets/fonts/space-grotesk-latin-wght-normal.woff2") format("woff2-variations");
+    }
+
     :root {
       color-scheme: dark;
 
@@ -995,14 +1020,14 @@
     <div class="console-column console-column-left">
       <span class="console-line" style="--line-length: 28">> boot docs.shell --stream</span>
       <span class="console-line" style="--line-length: 24">archive: intel/ok</span>
-      <span class="console-line" style="--line-length: 30">cipher: blake3-wasm / sha256</span>
+      <span class="console-line" style="--line-length: 27">hash: hmac-sha256 / aes-gcm</span>
       <span class="console-line" style="--line-length: 22">privacy boundary: armed</span>
       <span class="console-line" style="--line-length: 26">await next document</span>
     </div>
     <div class="console-column console-column-right">
       <span class="console-line" style="--line-length: 24">> knowledge.db sync</span>
       <span class="console-line" style="--line-length: 22">records: 4 public</span>
-      <span class="console-line" style="--line-length: 26">on-device storage only</span>
+      <span class="console-line" style="--line-length: 26">local + triage records</span>
       <span class="console-line" style="--line-length: 20">> _</span>
     </div>
   </div>
@@ -1035,15 +1060,31 @@
       <section class="hero">
         <p class="eyebrow">Privacy</p>
         <h1 class="glitch-title" data-scramble>Privacy Policy</h1>
-        <p class="lede">What SpamSniper processes on-device, what it does not collect, and how privacy boundaries are enforced.</p>
+        <p class="lede">What SpamSniper and the Triage Terminal process, what they do not collect, and how privacy boundaries are enforced.</p>
       </section>
 
       <section class="content">
         <article class="article">
-          <p><strong>Effective date:</strong> May 25, 2026</p>
+          <p><strong>Effective date:</strong> October 22, 2026</p>
 <h2>Summary</h2>
 <p>SpamSniper is designed to block unwanted calls without building a user profile.</p>
 <p>The app does not run analytics, advertising SDKs, or background tracking. It does not upload your personal blocklist entries, your contacts, or your call history to a SpamSniper-operated server.</p>
+<h2>Spam Triage Terminal</h2>
+<p>The optional Spam Sniper Triage Terminal lets people check, report, and challenge spam caller numbers. It stores only the minimum data needed to operate that community list.</p>
+<p>When you submit a phone number, the Triage Terminal normalizes it in memory, stores a keyed HMAC-SHA256 lookup hash, stores the E.164 value encrypted with AES-GCM, and stores a masked display string. The raw phone number is not stored in plain text. Legacy rows that predate this encryption are encrypted by a bounded maintenance job.</p>
+<p>The Triage Terminal also stores a reporter identifier. That identifier is a keyed HMAC-SHA256 hash derived from the request IP address. It is stored as <code>reporter_hash</code>, <code>requester_hash</code>, or <code>contestant_hash</code>.</p>
+<p>The IP address is not retained. It is used only for abuse prevention (Turnstile and rate limiting) and to derive that keyed reporter identifier for the report, removal request, or contest being submitted.</p>
+<p>The reporter identifier is used only to operate the community list: preventing duplicate reports, counting independent reporters for confidence, enforcing one contest per removal request per reporter, and applying limits or cooldowns on removal requests. It is not used for profiling, analytics, advertising, cross-site tracking, or marketing, and it is not sold or shared.</p>
+<p>Cloudflare may process request metadata at its edge to provide security, abuse prevention, and network delivery under Cloudflare's own terms.</p>
+<p>Cloudflare Turnstile protects public submissions. The operator dashboard is protected by Cloudflare Access. Cloudflare therefore processes limited request metadata when these features are used.</p>
+<p>Authorized operators can export verified spam entries, including full E.164 values, from the protected dashboard. The export is generated in memory and is not stored by the terminal.</p>
+<ul>
+<li>Report rows are retained for up to 12 months for duplicate-report prevention and confidence calculations, then purged in bounded maintenance batches.</li>
+<li>Resolved moderation records are retained for up to 12 months, subject to references needed for a number's current status.</li>
+<li>Administrator audit records are retained for up to 24 months and include the Cloudflare Access operator email for dashboard actions.</li>
+<li>Aggregated counters and masked number records may be retained while the number remains in the triage database.</li>
+</ul>
+<p>Fonts used by the Triage Terminal and this documentation are self-hosted. Neither loads third-party font services.</p>
 <h2>What SpamSniper Stores On Your Device</h2>
 <p>SpamSniper stores app data locally so call blocking can work on iPhone. That local data can include:</p>
 <ul>

@@ -4,11 +4,36 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#03080c">
+  <meta name="description" content="{{lede}}">
   <title>{{title}} // SPAM SNIPER DOCS</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="preload" href="assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/space-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <style>
+    @font-face {
+      font-family: "Inter";
+      font-style: normal;
+      font-display: swap;
+      font-weight: 100 900;
+      src: url("assets/fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+    }
+
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-display: swap;
+      font-weight: 100 800;
+      src: url("assets/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+    }
+
+    @font-face {
+      font-family: "Space Grotesk";
+      font-style: normal;
+      font-display: swap;
+      font-weight: 300 700;
+      src: url("assets/fonts/space-grotesk-latin-wght-normal.woff2") format("woff2-variations");
+    }
+
     :root {
       color-scheme: dark;
 
@@ -995,14 +1020,14 @@
     <div class="console-column console-column-left">
       <span class="console-line" style="--line-length: 28">> boot docs.shell --stream</span>
       <span class="console-line" style="--line-length: 24">archive: intel/ok</span>
-      <span class="console-line" style="--line-length: 30">cipher: blake3-wasm / sha256</span>
+      <span class="console-line" style="--line-length: 27">hash: hmac-sha256 / aes-gcm</span>
       <span class="console-line" style="--line-length: 22">privacy boundary: armed</span>
       <span class="console-line" style="--line-length: 26">await next document</span>
     </div>
     <div class="console-column console-column-right">
       <span class="console-line" style="--line-length: 24">> knowledge.db sync</span>
       <span class="console-line" style="--line-length: 22">records: 4 public</span>
-      <span class="console-line" style="--line-length: 26">on-device storage only</span>
+      <span class="console-line" style="--line-length: 26">local + triage records</span>
       <span class="console-line" style="--line-length: 20">> _</span>
     </div>
   </div>

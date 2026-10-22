@@ -1,28 +1,84 @@
 import { isUniqueConstraintError } from "../lib/d1.ts";
 import { encryptE164 } from "../lib/encryption.ts";
-import { hashNumber, hashReporter } from "../lib/hash.ts";
+import {
+  hashNumber,
+  hashNumberCandidates,
+  hashReporter,
+  hashReporterCandidates,
+} from "../lib/hash.ts";
 import { json, jsonError } from "../lib/http.ts";
+import {
+  bindRefreshNumberStats,
+  REFRESH_NUMBER_STATS_SQL,
+} from "../lib/number-stats.ts";
 import { normalizePhone } from "../lib/phone.ts";
+import { isoDaysAgo, RECENT_REPORT_WINDOW_DAYS } from "../lib/policy.ts";
 import { enforceRateLimit } from "../lib/rate-limit.ts";
 import { readJsonObject } from "../lib/request.ts";
-import {
-  computeNumberStatus,
-  type RemovalRequestStatus,
-} from "../lib/scoring.ts";
 import { turnstileOptions, verifyTurnstile } from "../lib/turnstile.ts";
 import { ReportBodySchema } from "../lib/validation.ts";
 import type { Env } from "../types.ts";
 
-const REMOVAL_STATUSES = new Set<string>([
-  "open",
-  "approved",
-  "rejected",
-  "contested",
-]);
+interface NumberRow {
+  id: number;
+  number_hash: string;
+  phone_number_enc: string | null;
+  phone_number_e164: string | null;
+  status: string;
+  report_count: number;
+  unique_reporter_count: number;
+  recent_unique_reporter_count: number;
+}
 
-function toRemovalStatus(value: string | null): RemovalRequestStatus | null {
-  if (!value || !REMOVAL_STATUSES.has(value)) return null;
-  return value as RemovalRequestStatus;
+interface NumberStats {
+  report_count: number;
+  unique_reporter_count: number;
+  recent_unique_reporter_count: number;
+  status: string;
+}
+
+function placeholders(count: number): string {
+  return Array.from({ length: count }, () => "?").join(", ");
+}
+
+async function findNumber(
+  env: Env,
+  candidates: string[],
+  currentHash: string,
+): Promise<NumberRow | null> {
+  return env.DB.prepare(
+    `SELECT id, number_hash, phone_number_enc, phone_number_e164, status,
+            report_count, unique_reporter_count, recent_unique_reporter_count
+       FROM numbers
+      WHERE number_hash IN (${placeholders(candidates.length)})
+      ORDER BY CASE WHEN number_hash = ? THEN 0 ELSE 1 END
+      LIMIT 1`,
+  )
+    .bind(...candidates, currentHash)
+    .first<NumberRow>();
+}
+
+async function getNumberStats(
+  env: Env,
+  numberId: number,
+): Promise<NumberStats | null> {
+  return env.DB.prepare(
+    "SELECT report_count, unique_reporter_count, recent_unique_reporter_count, status FROM numbers WHERE id = ?",
+  )
+    .bind(numberId)
+    .first<NumberStats>();
+}
+
+function duplicateResponse(stats: NumberStats, displayMask: string): Response {
+  return json({
+    ok: true,
+    duplicate: true,
+    maskedNumber: displayMask,
+    status: stats.status,
+    reportCount: stats.report_count,
+    uniqueReporterCount: stats.unique_reporter_count,
+    recentUniqueReporterCount: stats.recent_unique_reporter_count,
+  });
 }
 
 export async function handleReport(
@@ -33,7 +89,7 @@ export async function handleReport(
     return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
   }
 
-  const limited = await enforceRateLimit(env, request, "reports");
+  const limited = await enforceRateLimit(env, request, "reports", "write");
   if (limited) return limited;
 
   const bodyResult = await readJsonObject(request);
@@ -71,43 +127,27 @@ export async function handleReport(
     return jsonError("Invalid phone number", 400, "INVALID_PHONE_NUMBER");
   }
 
-  const numberHash = await hashNumber(env.HASH_SECRET, normalized.e164);
-  const reporterHash = await hashReporter(env.HASH_SECRET, ip, userAgent);
-  const now = new Date().toISOString();
+  const nowMs = Date.now();
+  const now = new Date(nowMs).toISOString();
+  const recentCutoff = isoDaysAgo(RECENT_REPORT_WINDOW_DAYS, nowMs);
+  const currentNumberHash = await hashNumber(env.HASH_SECRET, normalized.e164);
+  const numberHashes = await hashNumberCandidates(
+    env.HASH_SECRET,
+    env.HASH_SECRET_PREVIOUS,
+    normalized.e164,
+  );
 
   const db = env.DB;
-
-  // One lookup resolves both the number and its linked removal-request state.
-  const numberRow = await db
-    .prepare(
-      `SELECT n.id, n.phone_number_enc, n.phone_number_e164, n.status, n.report_count,
-              n.unique_reporter_count, n.removal_request_id, rr.status AS removal_status
-         FROM numbers n
-         LEFT JOIN removal_requests rr ON rr.id = n.removal_request_id
-        WHERE n.number_hash = ?`,
-    )
-    .bind(numberHash)
-    .first<{
-      id: number;
-      phone_number_enc: string | null;
-      phone_number_e164: string | null;
-      status: string;
-      report_count: number;
-      unique_reporter_count: number;
-      removal_request_id: number | null;
-      removal_status: string | null;
-    }>();
-
-  let numberId: number;
+  let numberRow = await findNumber(env, numberHashes, currentNumberHash);
 
   if (!numberRow) {
     const encryptedNumber = await encryptE164(env.HASH_SECRET, normalized.e164);
-    const insert = await db
+    await db
       .prepare(
-        "INSERT INTO numbers (number_hash, phone_number_e164, phone_number_enc, display_mask, country_code, status, first_reported_at, last_reported_at, updated_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(number_hash) DO NOTHING",
+        "INSERT INTO numbers (number_hash, phone_number_e164, phone_number_enc, display_mask, country_code, status, first_reported_at, last_reported_at, updated_at, status_checked_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(number_hash) DO NOTHING",
       )
       .bind(
-        numberHash,
+        currentNumberHash,
         encryptedNumber,
         normalized.displayMask,
         normalized.countryCode ?? null,
@@ -115,106 +155,155 @@ export async function handleReport(
         now,
         now,
         now,
+        now,
       )
       .run();
 
-    const insertedId =
-      (insert.meta?.changes ?? 1) > 0 ? insert.meta?.last_row_id : undefined;
-    if (insertedId) {
-      numberId = insertedId;
-    } else {
-      // Another writer inserted this number between our lookup and insert.
-      const raced = await db
-        .prepare("SELECT id FROM numbers WHERE number_hash = ?")
-        .bind(numberHash)
-        .first<{ id: number }>();
-      if (!raced) {
-        throw new Error("NUMBER_INSERT_RACE");
-      }
-      numberId = raced.id;
+    // The insert may have lost a race with another writer. Re-read either way,
+    // because the winning row is the one that owns the reports table.
+    numberRow = await findNumber(env, numberHashes, currentNumberHash);
+    if (!numberRow) {
+      throw new Error("NUMBER_INSERT_RACE");
     }
   } else {
-    numberId = numberRow.id;
-
-    // Rows created before at-rest encryption still carry plaintext. Encrypt on
-    // first touch so the daily migration only handles cold rows.
-    if (!numberRow.phone_number_enc) {
+    // Lazy migration: rehash legacy formats and encrypt plaintext/legacy
+    // ciphertext with the current key.
+    if (
+      numberRow.number_hash !== currentNumberHash ||
+      !numberRow.phone_number_enc ||
+      numberRow.phone_number_e164 !== null
+    ) {
       const encryptedNumber = await encryptE164(
         env.HASH_SECRET,
-        numberRow.phone_number_e164 ?? normalized.e164,
+        normalized.e164,
       );
-      await db
-        .prepare(
-          "UPDATE numbers SET phone_number_enc = ?, phone_number_e164 = NULL, display_mask = ?, country_code = ?, updated_at = ? WHERE id = ?",
-        )
-        .bind(
-          encryptedNumber,
-          normalized.displayMask,
-          normalized.countryCode ?? null,
-          now,
-          numberId,
-        )
-        .run();
+      try {
+        await db
+          .prepare(
+            "UPDATE numbers SET number_hash = ?, phone_number_enc = ?, phone_number_e164 = NULL, display_mask = ?, country_code = ?, updated_at = ? WHERE id = ? AND number_hash = ?",
+          )
+          .bind(
+            currentNumberHash,
+            encryptedNumber,
+            normalized.displayMask,
+            normalized.countryCode ?? null,
+            now,
+            numberRow.id,
+            numberRow.number_hash,
+          )
+          .run();
+        numberRow.number_hash = currentNumberHash;
+        numberRow.phone_number_enc = encryptedNumber;
+        numberRow.phone_number_e164 = null;
+      } catch (error) {
+        if (!isUniqueConstraintError(error)) throw error;
+        // A concurrent writer already owns the current hash. Keep the legacy
+        // hash for now, but never leave a plaintext value behind.
+        if (
+          numberRow.phone_number_e164 !== null ||
+          !numberRow.phone_number_enc
+        ) {
+          await db
+            .prepare(
+              "UPDATE numbers SET phone_number_enc = ?, phone_number_e164 = NULL, display_mask = ?, country_code = ?, updated_at = ? WHERE id = ? AND number_hash = ?",
+            )
+            .bind(
+              encryptedNumber,
+              normalized.displayMask,
+              normalized.countryCode ?? null,
+              now,
+              numberRow.id,
+              numberRow.number_hash,
+            )
+            .run();
+          numberRow.phone_number_enc = encryptedNumber;
+          numberRow.phone_number_e164 = null;
+        }
+      }
     }
   }
 
-  // Insert the report and read the fresh counts in one transaction. A
-  // duplicate reporter aborts the batch before counts are recalculated.
-  let counts: { total: number; unique: number } | null = null;
+  const reporterHash = await hashReporter(env.HASH_SECRET, ip);
+  const reporterHashes = await hashReporterCandidates(
+    env.HASH_SECRET,
+    env.HASH_SECRET_PREVIOUS,
+    ip,
+    userAgent,
+  );
+
+  const existingReport = await db
+    .prepare(
+      `SELECT 1 AS found FROM reports
+        WHERE number_id = ? AND reporter_hash IN (${placeholders(reporterHashes.length)})
+        LIMIT 1`,
+    )
+    .bind(numberRow.id, ...reporterHashes)
+    .first<{ found: number }>();
+
+  if (existingReport) {
+    const stats = await getNumberStats(env, numberRow.id);
+    return duplicateResponse(
+      stats ?? {
+        report_count: numberRow.report_count,
+        unique_reporter_count: numberRow.unique_reporter_count,
+        recent_unique_reporter_count: numberRow.recent_unique_reporter_count,
+        status: numberRow.status,
+      },
+      normalized.displayMask,
+    );
+  }
+
+  let stats: NumberStats | null = null;
   try {
-    const [, countResult] = await db.batch([
+    const results = await db.batch([
       db
         .prepare(
           "INSERT INTO reports (number_id, reporter_hash, category, created_at) VALUES (?, ?, ?, ?)",
         )
-        .bind(numberId, reporterHash, category, now),
+        .bind(numberRow.id, reporterHash, category, now),
+      bindRefreshNumberStats(
+        db.prepare(REFRESH_NUMBER_STATS_SQL),
+        numberRow.id,
+        recentCutoff,
+        now,
+      ),
       db
         .prepare(
-          "SELECT COUNT(*) as total, COUNT(DISTINCT reporter_hash) as unique FROM reports WHERE number_id = ?",
+          "SELECT report_count, unique_reporter_count, recent_unique_reporter_count, status FROM numbers WHERE id = ?",
         )
-        .bind(numberId),
+        .bind(numberRow.id),
     ]);
 
-    counts =
-      (countResult?.results?.[0] as
-        | { total: number; unique: number }
-        | undefined) ?? null;
-  } catch (e) {
-    if (isUniqueConstraintError(e)) {
-      return json({
-        ok: true,
-        duplicate: true,
-        maskedNumber: normalized.displayMask,
-        status: numberRow?.status ?? "pending",
-        reportCount: numberRow?.report_count ?? 0,
-        uniqueReporterCount: numberRow?.unique_reporter_count ?? 0,
-      });
+    stats =
+      (results[2]?.results?.[0] as NumberStats | undefined) ??
+      (await getNumberStats(env, numberRow.id));
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      const fresh = await getNumberStats(env, numberRow.id);
+      return duplicateResponse(
+        fresh ?? {
+          report_count: numberRow.report_count,
+          unique_reporter_count: numberRow.unique_reporter_count,
+          recent_unique_reporter_count: numberRow.recent_unique_reporter_count,
+          status: numberRow.status,
+        },
+        normalized.displayMask,
+      );
     }
-    throw e;
+    throw error;
   }
 
-  const reportCount = counts?.total ?? (numberRow?.report_count ?? 0) + 1;
-  const uniqueReporterCount =
-    counts?.unique ?? (numberRow?.unique_reporter_count ?? 0) + 1;
-
-  const newStatus = computeNumberStatus(
-    uniqueReporterCount,
-    toRemovalStatus(numberRow?.removal_status ?? null),
-  );
-
-  await db
-    .prepare(
-      "UPDATE numbers SET report_count = ?, unique_reporter_count = ?, status = ?, last_reported_at = ?, updated_at = ? WHERE id = ?",
-    )
-    .bind(reportCount, uniqueReporterCount, newStatus, now, now, numberId)
-    .run();
+  if (!stats) {
+    throw new Error("NUMBER_STATS_MISSING");
+  }
 
   return json({
     ok: true,
     duplicate: false,
     maskedNumber: normalized.displayMask,
-    status: newStatus,
-    reportCount,
-    uniqueReporterCount,
+    status: stats.status,
+    reportCount: stats.report_count,
+    uniqueReporterCount: stats.unique_reporter_count,
+    recentUniqueReporterCount: stats.recent_unique_reporter_count,
   });
 }

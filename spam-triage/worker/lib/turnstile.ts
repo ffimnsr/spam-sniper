@@ -1,4 +1,5 @@
 import type { Env } from "../types.ts";
+import { isLocalHostname } from "./host.ts";
 
 export interface TurnstileOptions {
   expectedAction?: string;
@@ -12,14 +13,18 @@ interface TurnstileResponse {
 }
 
 // Production tokens must come from the same origin and form that minted them.
-// Development mode skips both checks because Cloudflare test keys may omit
-// action/hostname fields.
+// Local development skips both checks because Cloudflare test keys may omit
+// action/hostname fields. The bypass is host-bound so a deployed environment
+// with ENVIRONMENT=development cannot weaken production checks.
 export function turnstileOptions(
   env: Env,
   request: Request,
   action: string,
 ): TurnstileOptions {
-  if (env.ENVIRONMENT === "development") {
+  if (
+    env.ENVIRONMENT === "development" &&
+    isLocalHostname(new URL(request.url).hostname)
+  ) {
     return {};
   }
 
@@ -63,7 +68,12 @@ export async function verifyTurnstile(
 
   if (!res.ok) return false;
 
-  const data = (await res.json()) as TurnstileResponse;
+  let data: TurnstileResponse;
+  try {
+    data = (await res.json()) as TurnstileResponse;
+  } catch {
+    return false;
+  }
   if (data.success !== true) return false;
 
   // A token minted for another form must not unlock this endpoint.

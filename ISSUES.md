@@ -10,7 +10,7 @@ The implementation plan for an open-source spam caller triage system built with:
 - Cloudflare Turnstile
 - Cloudflare Cron Triggers
 
-The system allows users to report spam caller numbers. Multiple unique reports increase confidence that a number is spam. Users may request removal of a number. If nobody contests the removal request within 7 days, the number is marked as removed.
+The system allows users to report spam caller numbers. Multiple unique recent reports increase confidence that a number is spam. Users may request removal of a number. If nobody contests the removal request within 7 days, low-confidence numbers are removed; verified numbers go to operator review.
 
 The plan intentionally avoids paid infrastructure and expensive features.
 
@@ -22,7 +22,7 @@ Rules:
     - Serve frontend assets as static files through Cloudflare Workers static assets.
     - Use Cloudflare D1 as the only database.
     - Use Cloudflare Turnstile for write-form abuse protection.
-    - Use Cloudflare Cron Triggers only once per day.
+    - Use at most three staggered daily Cloudflare Cron Triggers, each inside the D1 query budget.
     - Do not use paid services for MVP.
     - Do not add email sending.
     - Do not add SMS verification.
@@ -58,7 +58,7 @@ Fixed Technical Decisions:
   - Use Cloudflare D1 as the only persistent database.
   - Use Cloudflare Turnstile on every public write endpoint.
   - Use Cloudflare Cron Triggers for the daily 7-day removal finalizer.
-  - Use an admin password stored as a Cloudflare Worker secret for MVP admin access.
+  - Use Cloudflare Access for admin dashboard and admin API protection.
   - Use HMAC-SHA256 for number hashing.
   - Use HMAC-SHA256 for reporter hashing.
   - Use HMAC-SHA256 for IP hashing when needed.
@@ -70,7 +70,7 @@ Required Cloudflare Services:
     - Host the Worker API.
     - Serve Vite static assets.
     - Store secrets through Worker secrets.
-    - Run scheduled cron event once per day.
+    - Run staggered daily maintenance events.
   - Use Cloudflare D1.
     - Store phone-number report records.
     - Store removal requests.
@@ -83,6 +83,7 @@ Required Cloudflare Services:
     - Validate Turnstile tokens server-side only.
   - Use Cloudflare Cron Triggers.
     - Run removal finalizer once per day.
+    - Split migration and cleanup into separate daily triggers.
     - Do not run cron hourly for MVP.
 
 ---
@@ -222,8 +223,10 @@ Required Cloudflare Services:
   - [x] Configure static assets directory as `./dist`.
   - [x] Configure assets binding as `ASSETS`.
   - [x] Configure D1 binding as `DB`.
-  - [x] Configure cron trigger as daily.
-  - [x] Use one daily cron expression: `0 0 * * *`.
+  - [x] Configure daily cron triggers.
+  - [x] Use `0 0 * * *` for reconcile/finalize.
+  - [x] Use `10 0 * * *` for legacy migration.
+  - [x] Use `20 0 * * *` for retention cleanup.
 
 - [x] Add Worker types.
   - [x] Create `worker/types.ts`.
@@ -231,8 +234,9 @@ Required Cloudflare Services:
   - [x] Include `DB: D1Database`.
   - [x] Include `ASSETS: Fetcher`.
   - [x] Include `HASH_SECRET: string`.
+  - [x] Include `HASH_SECRET_PREVIOUS?: string`.
   - [x] Include `TURNSTILE_SECRET_KEY: string`.
-  - [x] Include `ADMIN_PASSWORD: string`.
+  - [x] Include `HIDDEN_ADMIN_PATH: string`.
 
 - [x] Implement Worker entrypoint.
   - [x] Export default object.
@@ -277,16 +281,17 @@ Required Cloudflare Services:
   - [x] Store the secret key as a Worker secret.
   - [x] Never validate Turnstile on the frontend only.
 
-- [x] Configure `ADMIN_PASSWORD`.
-  - [x] Generate a strong admin password.
-  - [x] Store it as a Worker secret.
-  - [x] Do not commit it.
-  - [x] Use it only for MVP admin access.
+- [x] Configure Cloudflare Access.
+  - [x] Protect the hidden dashboard route.
+  - [x] Protect the admin API base path.
+  - [x] Require Access identity headers in the Worker.
+  - [x] Disable `workers_dev` to prevent bypass.
 
 - [x] Create `.dev.vars` for local development.
   - [x] Add local `HASH_SECRET`.
   - [x] Add local `TURNSTILE_SECRET_KEY`.
-  - [x] Add local `ADMIN_PASSWORD`.
+  - [x] Add local `HIDDEN_ADMIN_PATH`.
+  - [x] Add local `ENVIRONMENT=development` for the Access bypass.
   - [x] Keep `.dev.vars` ignored by Git.
 
 ---
@@ -585,11 +590,11 @@ Required Cloudflare Services:
   - [x] Route `POST /api/reports`.
   - [x] Route `GET /api/numbers/check`.
   - [x] Route `POST /api/removal-requests`.
-  - [x] Route `GET /api/removal-requests/:id`.
-  - [x] Route `POST /api/removal-requests/:id/contest`.
-  - [x] Route `GET /api/admin/summary`.
-  - [x] Route `GET /api/admin/removal-requests`.
-  - [x] Route `POST /api/admin/removal-requests/:id/resolve`.
+  - [x] Route `GET /api/removal-requests/:token`.
+  - [x] Route `POST /api/removal-requests/:token/contest`.
+  - [x] Route `GET /api/<hidden-admin>/summary`.
+  - [x] Route `GET /api/<hidden-admin>/removal-requests`.
+  - [x] Route `POST /api/<hidden-admin>/removal-requests/:id/resolve`.
 
 - [x] Enforce HTTP methods.
   - [x] Return 405 for unsupported methods.
@@ -791,7 +796,7 @@ Required Cloudflare Services:
   - [x] Run once per day.
   - [x] Do not scan the entire database.
   - [x] Use index on `(status, contest_deadline)`.
-  - [x] Limit batch size.
+  - [x] Process due rows with set-based statements.
   - [x] Do not generate emails.
   - [x] Do not call external APIs.
 
@@ -813,8 +818,8 @@ Required Cloudflare Services:
   - [x] Route `/check` to number checker page.
   - [x] Route `/report` to report page.
   - [x] Route `/remove` to removal request page.
-  - [x] Route `/removal/:id` to removal request detail page.
-  - [x] Route `/admin` to basic admin page.
+  - [x] Route `/removal/:token` to removal request detail page.
+  - [x] Route the hidden admin path to the basic admin page.
   - [x] Route unknown paths to not-found page.
 
 - [x] Keep bundle small.
@@ -901,7 +906,7 @@ Required Cloudflare Services:
   - [x] Add call-to-action to request removal.
 
 - [x] Add free-tier/open-source transparency.
-  - [x] State that the project avoids accounts, uploads, and tracking for MVP.
+  - [x] State that the project avoids accounts, uploads, and behavioral tracking for MVP.
   - [x] State that data collection is intentionally minimal.
   - [x] State that abuse protection uses Turnstile.
 
@@ -1036,25 +1041,23 @@ Required Cloudflare Services:
 
 ## 9.1 Implement admin authentication
 
-- [x] Use password-only admin access for MVP.
-  - [x] Add password input on `/admin`.
-  - [x] Send password as `Authorization: Bearer <password>`.
-  - [x] Compare against `ADMIN_PASSWORD` in Worker.
-  - [x] Do not store admin password in localStorage.
-  - [x] Keep password only in memory state during session.
-  - [x] Clear password when tab reloads.
+- [x] Use Cloudflare Access on the hidden admin route and the admin API.
+  - [x] Remove the password form.
+  - [x] Remove stateless admin session tokens.
+  - [x] Require Access identity headers in the Worker.
+  - [x] Show an Access-required state when the API rejects the request.
 
 - [x] Protect admin API routes.
-  - [x] Require `Authorization` header.
-  - [x] Reject missing token.
-  - [x] Reject incorrect token.
+  - [x] Require `Cf-Access-Authenticated-User-Email`.
+  - [x] Require `Cf-Access-Jwt-Assertion`.
+  - [x] Reject missing headers.
   - [x] Return 401 JSON error.
 
 ---
 
 ## 9.2 Implement admin summary endpoint
 
-- [x] Implement `GET /api/admin/summary`.
+- [x] Implement `GET /api/<hidden-admin>/summary`.
   - [x] Count total numbers.
   - [x] Count pending numbers.
   - [x] Count suspected numbers.
@@ -1063,6 +1066,7 @@ Required Cloudflare Services:
   - [x] Count disputed numbers.
   - [x] Count removed numbers.
   - [x] Count open removal requests.
+  - [x] Count pending-review removal requests.
   - [x] Count contested removal requests.
   - [x] Keep queries simple.
   - [x] Do not compute expensive analytics.
@@ -1071,15 +1075,15 @@ Required Cloudflare Services:
 
 ## 9.3 Implement admin removal review endpoint
 
-- [x] Implement `GET /api/admin/removal-requests`.
-  - [x] Return open and contested removal requests.
-  - [x] Limit results to 100.
+- [x] Implement `GET /api/<hidden-admin>/removal-requests`.
+  - [x] Return open, pending-review, and contested removal requests by default.
+  - [x] Support status filtering with a 100-row page limit.
   - [x] Include masked number.
   - [x] Include status.
   - [x] Include reason.
   - [x] Include contest count.
   - [x] Include contest deadline.
-  - [x] Sort by newest first.
+  - [x] Prioritize pending review, then contested, then open; newest first within a status.
 
 - [x] Implement frontend admin list.
   - [x] Show removal request rows.
@@ -1096,7 +1100,7 @@ Required Cloudflare Services:
 
 ## 9.4 Implement admin resolution endpoint
 
-- [x] Implement `POST /api/admin/removal-requests/:id/resolve`.
+- [x] Implement `POST /api/<hidden-admin>/removal-requests/:id/resolve`.
   - [x] Require admin auth.
   - [x] Validate request ID.
   - [x] Validate action.
@@ -1110,7 +1114,7 @@ Required Cloudflare Services:
 
 - [x] Implement reject removal.
   - [x] Set removal request status to `rejected`.
-  - [x] Recompute number status from unique report count.
+  - [x] Recompute number status from the recent unique reporter count.
 
 - [x] Implement mark disputed.
   - [x] Set removal request status to `contested`.
@@ -1148,8 +1152,8 @@ Required Cloudflare Services:
   - [x] Store removal reason.
   - [x] Store contest reason.
   - [x] Store timestamps.
-  - [x] Do not store names.
-  - [x] Do not store emails.
+  - [x] Do not store public user names or emails.
+  - [x] Store operator email only in the admin audit log.
   - [x] Do not store accounts.
   - [x] Do not store free-form evidence text for MVP.
 
@@ -1238,10 +1242,11 @@ Required Cloudflare Services:
 
 ## 11.3 Cron controls
 
-- [x] Run cron once daily only.
-  - [x] Use `0 0 * * *`.
+- [x] Run maintenance on three staggered daily triggers.
+  - [x] Use `0 0 * * *`, `10 0 * * *`, and `20 0 * * *`.
   - [x] Process only due open removal requests.
-  - [x] Limit processing to 100 rows per run.
+  - [x] Use set-based statements instead of per-row scans.
+  - [x] Keep each invocation inside the D1 query budget.
   - [x] Do not scan all reports.
   - [x] Do not call external APIs.
   - [x] Do not send notifications.
@@ -1338,59 +1343,60 @@ Required Cloudflare Services:
 
 ## 13.1 README
 
-- [ ] Create project README.
-  - [ ] Explain project purpose.
-  - [ ] Explain free-tier-first architecture.
-  - [ ] Explain privacy model.
-  - [ ] Explain database choices.
-  - [ ] Explain removal contest process.
-  - [ ] Explain local development setup.
+- [x] Create project README.
+  - [x] Explain project purpose.
+  - [x] Explain free-tier-first architecture.
+  - [x] Explain privacy model.
+  - [x] Explain database choices.
+  - [x] Explain removal contest process.
+  - [x] Explain local development setup.
   - [x] Explain deployment setup.
-  - [ ] Explain Cloudflare services required.
-  - [ ] Explain what is intentionally not included.
+  - [x] Explain Cloudflare services required.
+  - [x] Explain what is intentionally not included.
 
 ---
 
 ## 13.2 Environment documentation
 
-- [ ] Create `.env.example`.
-  - [ ] Add `VITE_TURNSTILE_SITE_KEY=`.
-  - [ ] Do not include Worker secrets.
+- [x] Create `.env.example`.
+  - [x] Add `VITE_TURNSTILE_SITE_KEY=`.
+  - [x] Do not include Worker secrets.
 
-- [ ] Create `.dev.vars.example`.
-  - [ ] Add `HASH_SECRET=`.
-  - [ ] Add `TURNSTILE_SECRET_KEY=`.
-  - [ ] Add `ADMIN_PASSWORD=`.
-  - [ ] Mark as local-only.
-  - [ ] Tell users to copy to `.dev.vars`.
+- [x] Create `.dev.vars.example`.
+  - [x] Add `HASH_SECRET=`.
+  - [x] Add `HASH_SECRET_PREVIOUS=`.
+  - [x] Add `TURNSTILE_SECRET_KEY=`.
+  - [x] Add `HIDDEN_ADMIN_PATH=`.
+  - [x] Mark as local-only.
+  - [x] Tell users to copy to `.dev.vars`.
 
 ---
 
 ## 13.3 Privacy policy
 
-- [ ] Create `docs/privacy.md`.
-  - [ ] State no accounts are required.
-  - [ ] State no analytics are used.
-  - [ ] State no ads are used.
-  - [ ] State no tracking is used.
-  - [ ] State reports are stored as hashed phone-number records.
-  - [ ] State phone numbers are publicly masked.
-  - [ ] State raw phone numbers are not stored in plain text.
-  - [ ] State Turnstile is used for abuse prevention.
-  - [ ] State removal requests are available.
+- [x] Update the privacy policy.
+  - [x] State no accounts are required.
+  - [x] State no analytics are used.
+  - [x] State no ads are used.
+  - [x] State reporter identifiers are used only for duplicate-report, confidence, and abuse checks.
+  - [x] State reports are stored as hashed phone-number records.
+  - [x] State phone numbers are publicly masked.
+  - [x] State raw phone numbers are not stored in plain text.
+  - [x] State Turnstile and Cloudflare Access are used for abuse prevention.
+  - [x] State removal requests are available.
 
 ---
 
 ## 13.4 Contributing guide
 
-- [ ] Create `CONTRIBUTING.md`.
-  - [ ] Explain how to run locally.
-  - [ ] Explain how to run migrations.
-  - [ ] Explain how to test.
-  - [ ] Explain free-tier constraints.
-  - [ ] Require issues before adding paid-service dependencies.
-  - [ ] Require privacy review before adding new stored fields.
-  - [ ] Require abuse review before adding public endpoints.
+- [x] Create `CONTRIBUTING.md`.
+  - [x] Explain how to run locally.
+  - [x] Explain how to run migrations.
+  - [x] Explain how to test.
+  - [x] Explain free-tier constraints.
+  - [x] Require issues before adding paid-service dependencies.
+  - [x] Require privacy review before adding new stored fields.
+  - [x] Require abuse review before adding public endpoints.
 
 ---
 
@@ -1421,7 +1427,8 @@ Required Cloudflare Services:
 - [ ] Set Worker secrets remotely.
   - [ ] Set `HASH_SECRET`.
   - [ ] Set `TURNSTILE_SECRET_KEY`.
-  - [ ] Set `ADMIN_PASSWORD`.
+  - [ ] Set `HASH_SECRET_PREVIOUS` only during key rotation.
+  - [ ] Configure Cloudflare Access for the dashboard and admin API paths.
 
 - [ ] Deploy Worker.
   - [ ] Run deploy command.
@@ -1463,7 +1470,8 @@ Required Cloudflare Services:
 - [ ] Confirm duplicate reports do not increase count.
 - [ ] Confirm 3 unique reports marks a number as verified spam.
 - [ ] Confirm removal request creates a 7-day contest period.
-- [ ] Confirm no-contest removal marks the number as removed.
+- [ ] Confirm an uncontested low-confidence removal marks the number as removed.
+- [ ] Confirm an uncontested verified-spam removal enters `pending_review`.
 - [ ] Confirm contested removal marks the number as disputed.
 - [ ] Confirm admin can approve removal.
 - [ ] Confirm admin can reject removal.
@@ -1472,10 +1480,78 @@ Required Cloudflare Services:
 - [ ] Confirm no account system exists.
 - [ ] Confirm no analytics exists.
 - [ ] Confirm no external paid APIs are used.
-- [ ] Confirm README explains free-tier constraints.
-- [ ] Confirm privacy policy exists.
-- [ ] Confirm `.env.example` exists.
-- [ ] Confirm `.dev.vars.example` exists.
+- [x] Confirm README explains free-tier constraints.
+- [x] Confirm privacy policy exists.
+- [x] Confirm `.env.example` exists.
+- [x] Confirm `.dev.vars.example` exists.
 - [ ] Tag the first MVP release.
+
+---
+
+# Post-MVP Hardening — Completed
+
+## Correctness and abuse
+
+- [x] Prevent mass-delist abuse: verified-spam removals require operator review.
+- [x] Add per-reporter daily removal limits and rejected-request cooldowns.
+- [x] Make report count/status updates atomic in one D1 batch.
+- [x] Add 90-day recency windows for status confidence.
+- [x] Add daily reconciliation for counters and statuses.
+- [x] Add bounded retention cleanup for reports, moderation records, and audit rows.
+- [x] Allow the finalizer to process up to five bounded batches per daily run.
+- [x] Preserve legacy `removed` status and relink approved removal records.
+- [x] Recheck active-request, daily-limit, and cooldown rules inside the removal insert.
+- [x] Use IP-only reporter hashing so user-agent rotation cannot mint reporters.
+- [x] Derive public status from fresh recent report counts.
+- [x] Convert finalizer, reconcile, and cleanup to set-based statements.
+- [x] Split maintenance across three cron triggers to stay inside D1 query budgets.
+- [x] Mark undecryptable legacy rows so the migration cannot stall.
+
+## Security and operations
+
+- [x] Remove admin passwords and stateless admin tokens.
+- [x] Require Cloudflare Access identity headers on admin routes.
+- [x] Disable `workers_dev` so the custom domain route is the only entry point.
+- [x] Add `v2:` number/reporter hash versions with previous-secret dual read.
+- [x] Add AES-GCM previous-key decryption for secret rotation.
+- [x] Add a legacy number rehash/re-encrypt cron job.
+- [x] Bound JSON reads by streaming instead of buffering the full body.
+- [x] Add write/read rate-limit bindings.
+- [x] Add CSP, HSTS, referrer, permissions, and noindex headers.
+- [x] Self-host fonts and remove Google Fonts requests from the app and documentation.
+- [x] Add request IDs and a database-backed health check.
+- [x] Add admin audit logging.
+
+## Data and UI
+
+- [x] Add status/category/reason validation triggers.
+- [x] Remove a redundant reports index and add maintenance/export indexes.
+- [x] Paginate the verified-spam admin export.
+- [x] Skip undecryptable export rows instead of emitting the display mask as E.164.
+- [x] Add admin queue stats, contest reasons, and audit display.
+- [x] Lazy-load route modules and reduce the initial JS bundle.
+- [x] Remove unused `@tanstack/react-query` and `autoprefixer` dependencies.
+- [x] Use `libphonenumber-js/min` on the frontend.
+- [x] Add frontend fetch timeouts.
+- [x] Fix phone input label/error accessibility associations.
+- [x] Add real SQLite migration integration tests.
+- [x] Add CI for lint, typecheck, tests, and build.
+
+## Second pass
+
+- [x] Encrypt legacy plaintext even when a number rehash collides.
+- [x] Drain up to five finalizer batches per daily run.
+- [x] Derive admin queue and reject decisions from fresh recent report counts.
+- [x] Bind Cloudflare Access and Turnstile dev bypasses to local hostnames.
+- [x] Abort scheduled jobs when required Worker configuration is missing.
+- [x] Rate-limit public removal-detail reads.
+- [x] Correct app font-family names so bundled Fontsource files are used.
+- [x] Self-host documentation fonts and remove Google Fonts from docs.
+- [x] Correct privacy and crypto copy in the docs template.
+- [x] Add helper/error accessibility associations and hide decorative icons.
+
+## Remaining follow-up
+
+- [ ] Produce a PGP-signed export artifact compatible with the SpamSniper blocklist import flow. Signing must happen outside the Worker with the existing repository signing key.
 
 ---

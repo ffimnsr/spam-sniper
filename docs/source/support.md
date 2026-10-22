@@ -35,6 +35,8 @@ For setup questions or feature requests, describe what you are trying to do and 
 
 SpamSniper keeps personal blocklist entries on-device. Repository blocklists are downloaded from the selected source, verified, and merged locally before being handed off to iOS for blocking.
 
+The optional Spam Sniper Triage Terminal is separate from the iOS app and stores community report data as described in the privacy policy.
+
 ## Contact
 
 Open an issue here:

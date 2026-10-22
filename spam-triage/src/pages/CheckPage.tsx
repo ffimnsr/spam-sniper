@@ -43,6 +43,7 @@ export default function CheckPage() {
     status?: string;
     reportCount?: number;
     uniqueReporterCount?: number;
+    recentUniqueReporterCount?: number;
     removalStatus?: string;
     contestDeadline?: string;
     contestWindowOpen?: boolean;
@@ -74,6 +75,7 @@ export default function CheckPage() {
           status: res.status,
           reportCount: res.reportCount,
           uniqueReporterCount: res.uniqueReporterCount,
+          recentUniqueReporterCount: res.recentUniqueReporterCount,
           removalStatus: res.removalStatus,
           contestDeadline: res.contestDeadline,
           contestWindowOpen: res.contestWindowOpen,
@@ -222,6 +224,7 @@ export default function CheckPage() {
                   status={result.status}
                   reportCount={result.reportCount}
                   uniqueReporterCount={result.uniqueReporterCount}
+                  recentUniqueReporterCount={result.recentUniqueReporterCount}
                 />
 
                 {/* Removal contest notice if applicable */}

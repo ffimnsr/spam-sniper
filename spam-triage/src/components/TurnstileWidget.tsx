@@ -75,7 +75,7 @@ export function TurnstileWidget({
         }
       }
 
-      containerRef.current.innerHTML = "";
+      containerRef.current.replaceChildren();
       setIsVerified(false);
 
       widgetIdRef.current = window.turnstile.render(containerRef.current, {

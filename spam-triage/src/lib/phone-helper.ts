@@ -1,9 +1,8 @@
 import {
   AsYouType,
   type CountryCode,
-  getCountryCallingCode,
   parsePhoneNumberFromString,
-} from "libphonenumber-js";
+} from "libphonenumber-js/min";
 
 export interface CountryItem {
   code: string;
@@ -117,12 +116,4 @@ export function detectCountryFromInput(input: string): string | null {
     // Ignore detection error
   }
   return null;
-}
-
-export function getDialCode(countryCode: string): string {
-  try {
-    return `+${getCountryCallingCode(countryCode as CountryCode)}`;
-  } catch {
-    return "";
-  }
 }

@@ -11,7 +11,7 @@ export function TerminalTicker() {
       );
     };
     update();
-    const interval = setInterval(update, 73);
+    const interval = setInterval(update, 1_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -35,20 +35,19 @@ export function TerminalTicker() {
         {/* Telemetry Stream Ticker */}
         <div className="hidden sm:flex items-center gap-4 overflow-hidden text-slate-500 text-[10px]">
           <span>
-            CIPHER:{" "}
-            <span className="text-slate-300">BLAKE3-WASM // SHA-256</span>
+            HASH: <span className="text-slate-300">HMAC-SHA256 // AES-GCM</span>
           </span>
           <span className="text-cyan-500/40">//</span>
           <span>
-            SHIELD_HEALTH: <span className="text-[#00ff88]">100% ONLINE</span>
+            MAINTENANCE: <span className="text-[#00ff88]">DAILY</span>
           </span>
           <span className="text-cyan-500/40">//</span>
           <span>
-            ANOMALY_INDEX: <span className="text-cyan-300">0.038</span>
+            ADMIN: <span className="text-cyan-300">CF ACCESS</span>
           </span>
           <span className="text-cyan-500/40">//</span>
           <span className="text-[#ff2a6d] font-bold animate-pulse">
-            DEFENSE_MATRIX: ACTIVE
+            RECONCILE: ENABLED
           </span>
         </div>
       </div>

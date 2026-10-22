@@ -7,6 +7,7 @@ export interface CheckNumberResponse {
   status?: string;
   reportCount?: number;
   uniqueReporterCount?: number;
+  recentUniqueReporterCount?: number;
   removalStatus?: string;
   contestDeadline?: string;
   contestWindowOpen?: boolean;
@@ -40,6 +41,7 @@ export interface SubmitReportResponse {
   status: string;
   reportCount: number;
   uniqueReporterCount?: number;
+  recentUniqueReporterCount?: number;
 }
 
 export function submitReport(body: SubmitReportBody) {

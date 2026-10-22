@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import {
   BrowserRouter,
   Link,
@@ -13,13 +14,14 @@ import { SoundToggle } from "./components/SoundToggle.tsx";
 import { TerminalTicker } from "./components/TerminalTicker.tsx";
 import { hiddenAdminRoute } from "./lib/admin-path.ts";
 import { soundFx } from "./lib/sound-fx.ts";
-import AdminPage from "./pages/AdminPage.tsx";
-import CheckPage from "./pages/CheckPage.tsx";
 import HomePage from "./pages/HomePage.tsx";
-import NotFoundPage from "./pages/NotFoundPage.tsx";
-import RemovalDetailPage from "./pages/RemovalDetailPage.tsx";
-import RemovePage from "./pages/RemovePage.tsx";
-import ReportPage from "./pages/ReportPage.tsx";
+
+const AdminPage = lazy(() => import("./pages/AdminPage.tsx"));
+const CheckPage = lazy(() => import("./pages/CheckPage.tsx"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage.tsx"));
+const RemovalDetailPage = lazy(() => import("./pages/RemovalDetailPage.tsx"));
+const RemovePage = lazy(() => import("./pages/RemovePage.tsx"));
+const ReportPage = lazy(() => import("./pages/ReportPage.tsx"));
 
 export default function App() {
   return (
@@ -94,16 +96,24 @@ export default function App() {
         {/* Main Content Area */}
         <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
           <section className="app-panel">
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/check" element={<CheckPage />} />
-              <Route path="/report" element={<ReportPage />} />
-              <Route path="/remove" element={<RemovePage />} />
-              <Route path="/removal/:token" element={<RemovalDetailPage />} />
-              <Route path={hiddenAdminRoute} element={<AdminPage />} />
-              <Route path="/404" element={<NotFoundPage />} />
-              <Route path="*" element={<Navigate to="/404" />} />
-            </Routes>
+            <Suspense
+              fallback={
+                <p className="font-mono text-sm text-cyan-400 animate-pulse">
+                  [SYSTEM_LOADING] Resolving route module...
+                </p>
+              }
+            >
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/check" element={<CheckPage />} />
+                <Route path="/report" element={<ReportPage />} />
+                <Route path="/remove" element={<RemovePage />} />
+                <Route path="/removal/:token" element={<RemovalDetailPage />} />
+                <Route path={hiddenAdminRoute} element={<AdminPage />} />
+                <Route path="/404" element={<NotFoundPage />} />
+                <Route path="*" element={<Navigate to="/404" />} />
+              </Routes>
+            </Suspense>
           </section>
         </main>
 
@@ -120,8 +130,9 @@ export default function App() {
                 </span>
               </div>
               <p className="text-slate-500 text-[11px]">
-                Cryptographic zero-knowledge lookup. No accounts, no IP
-                tracking, no persistent telemetry.
+                No accounts. Keyed HMAC lookups, masked numbers, and reporter
+                identifiers used only for duplicate-report, confidence, and
+                abuse checks.
               </p>
             </div>
 
@@ -147,6 +158,24 @@ export default function App() {
               >
                 // CONTEST_RECORD
               </Link>
+              <a
+                href="https://spam-sniper.vastorigins.com/privacy_policy.html"
+                className="text-slate-400 hover:text-cyan-300 transition-colors"
+              >
+                // PRIVACY
+              </a>
+              <a
+                href="https://spam-sniper.vastorigins.com/terms.html"
+                className="text-slate-400 hover:text-cyan-300 transition-colors"
+              >
+                // TERMS
+              </a>
+              <a
+                href="https://spam-sniper.vastorigins.com/support.html"
+                className="text-slate-400 hover:text-cyan-300 transition-colors"
+              >
+                // SUPPORT
+              </a>
             </div>
           </div>
         </footer>

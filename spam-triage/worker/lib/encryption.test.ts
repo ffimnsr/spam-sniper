@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { decryptE164, encryptE164 } from "./encryption.ts";
 
 const SECRET = "test-secret";
+const PREVIOUS = "previous-secret";
 const PHONE = "+639171234567";
 
 describe("E.164 encryption", () => {
@@ -18,6 +19,13 @@ describe("E.164 encryption", () => {
     const second = await encryptE164(SECRET, PHONE);
 
     expect(first).not.toBe(second);
+  });
+
+  it("decrypts old ciphertext with the previous key during rotation", async () => {
+    const oldPayload = await encryptE164(PREVIOUS, PHONE);
+
+    expect(await decryptE164(SECRET, oldPayload, PREVIOUS)).toBe(PHONE);
+    expect(await decryptE164(SECRET, oldPayload)).toBeNull();
   });
 
   it("fails to decrypt with a different secret", async () => {

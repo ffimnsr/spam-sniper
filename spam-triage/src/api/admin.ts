@@ -1,12 +1,21 @@
 import {
   buildAdminResolveApiPath,
   getAdminExportApiPath,
-  getAdminLoginApiPath,
   getAdminRemovalRequestsApiPath,
   getAdminSummaryApiPath,
 } from "../../shared/admin-paths.ts";
 import { hiddenAdminRoute } from "../lib/admin-path.ts";
-import { apiPost } from "./client.ts";
+import { apiGet, apiPost } from "./client.ts";
+
+export interface AdminAuditEntry {
+  id: number;
+  actor: string;
+  action: string;
+  target_type: string;
+  target_id: number | null;
+  metadata: string | null;
+  created_at: string;
+}
 
 export interface AdminSummary {
   ok: true;
@@ -18,7 +27,10 @@ export interface AdminSummary {
   disputed: number;
   removed: number;
   openRemovalRequests: number;
+  pendingReviewRemovalRequests: number;
   contestedRemovalRequests: number;
+  recentAudit: AdminAuditEntry[];
+  maintenance: Record<string, string>;
 }
 
 export interface AdminRemovalRequest {
@@ -28,12 +40,21 @@ export interface AdminRemovalRequest {
   contest_deadline: string;
   created_at: string;
   display_mask: string;
+  number_status: string;
+  report_count: number;
+  unique_reporter_count: number;
+  recent_unique_reporter_count: number;
   contest_count: number;
+  contest_reasons: string | null;
 }
 
 export interface AdminRemovalRequestsResponse {
   ok: true;
   requests: AdminRemovalRequest[];
+  total: number;
+  status?: string;
+  limit: number;
+  offset: number;
 }
 
 export interface AdminResolveBody {
@@ -43,6 +64,7 @@ export interface AdminResolveBody {
 export interface AdminResolveResponse {
   ok: true;
   action: string;
+  numberStatus: string;
 }
 
 export interface AdminExportEntry {
@@ -52,6 +74,7 @@ export interface AdminExportEntry {
   confidence: string;
   report_count: number;
   unique_reporter_count: number;
+  recent_unique_reporter_count: number;
   country_code?: string;
   first_reported_at: string;
   last_reported_at: string;
@@ -64,111 +87,37 @@ export interface AdminExportResponse {
   source: string;
   notes: string[];
   total_entries: number;
+  returned_entries: number;
+  skipped_entries: number;
+  has_more: boolean;
+  next_offset: number | null;
   entries: AdminExportEntry[];
 }
 
-export interface AdminLoginResponse {
-  ok: true;
-  token: string;
-  expiresAt: string;
-  summary: AdminSummary;
-  requests: AdminRemovalRequest[];
+export function getAdminSummary() {
+  return apiGet<AdminSummary>(getAdminSummaryApiPath(hiddenAdminRoute));
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function getApiErrorDetails(data: unknown, fallbackMessage: string) {
-  const invalid = {
-    code: "INVALID_RESPONSE",
-    message: fallbackMessage || "Request failed",
-  };
-
-  if (!isRecord(data)) {
-    return invalid;
-  }
-
-  const error = data.error;
-  if (!isRecord(error)) {
-    return invalid;
-  }
-
-  return {
-    code: "code" in error ? String(error.code) : invalid.code,
-    message: "message" in error ? String(error.message) : invalid.message,
-  };
-}
-
-async function apiGetWithAuth<T>(path: string, token: string): Promise<T> {
-  const res = await fetch(path, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const data = (await res.json().catch(() => null)) as unknown;
-  if (!res.ok || !isRecord(data) || data.ok !== true) {
-    const { code, message } = getApiErrorDetails(data, res.statusText);
-    throw new Error(`${code}: ${message}`);
-  }
-  return data as T;
-}
-
-async function apiPostWithAuth<T>(
-  path: string,
-  body: unknown,
-  token: string,
-): Promise<T> {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => null)) as unknown;
-  if (!res.ok || !isRecord(data) || data.ok !== true) {
-    const { code, message } = getApiErrorDetails(data, res.statusText);
-    throw new Error(`${code}: ${message}`);
-  }
-  return data as T;
-}
-
-export function getAdminSummary(token: string) {
-  return apiGetWithAuth<AdminSummary>(
-    getAdminSummaryApiPath(hiddenAdminRoute),
-    token,
+export function getAdminRemovalRequests(status = "active") {
+  const params = new URLSearchParams({ status, limit: "100" });
+  return apiGet<AdminRemovalRequestsResponse>(
+    `${getAdminRemovalRequestsApiPath(hiddenAdminRoute)}?${params.toString()}`,
   );
 }
 
-export function loginAdmin(password: string, turnstileToken: string) {
-  return apiPost<AdminLoginResponse>(getAdminLoginApiPath(hiddenAdminRoute), {
-    password,
-    turnstileToken,
-  });
-}
-
-export function getAdminRemovalRequests(token: string) {
-  return apiGetWithAuth<AdminRemovalRequestsResponse>(
-    getAdminRemovalRequestsApiPath(hiddenAdminRoute),
-    token,
-  );
-}
-
-export function resolveAdminRemovalRequest(
-  id: number,
-  body: AdminResolveBody,
-  token: string,
-) {
-  return apiPostWithAuth<AdminResolveResponse>(
+export function resolveAdminRemovalRequest(id: number, body: AdminResolveBody) {
+  return apiPost<AdminResolveResponse>(
     buildAdminResolveApiPath(hiddenAdminRoute, id),
     body,
-    token,
   );
 }
 
-export function getAdminExport(token: string) {
-  return apiGetWithAuth<AdminExportResponse>(
-    getAdminExportApiPath(hiddenAdminRoute),
-    token,
+export function getAdminExport(limit = 500, offset = 0) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  return apiGet<AdminExportResponse>(
+    `${getAdminExportApiPath(hiddenAdminRoute)}?${params.toString()}`,
   );
 }

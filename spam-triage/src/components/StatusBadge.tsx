@@ -56,6 +56,41 @@ const statusConfig: Record<
     prefix: "CONTEST",
     label: "Disputed",
   },
+  pending_review: {
+    badgeClass:
+      "border-purple-500/70 bg-purple-500/15 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.25)]",
+    dotClass: "bg-purple-400",
+    prefix: "REVIEW",
+    label: "Pending Review",
+  },
+  open: {
+    badgeClass:
+      "border-cyan-500/60 bg-cyan-500/15 text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.2)]",
+    dotClass: "bg-cyan-400",
+    prefix: "OPEN",
+    label: "Open",
+  },
+  contested: {
+    badgeClass:
+      "border-yellow-400/70 bg-yellow-400/15 text-yellow-300 shadow-[0_0_15px_rgba(255,230,0,0.2)]",
+    dotClass: "bg-yellow-400",
+    prefix: "CONTEST",
+    label: "Contested",
+  },
+  approved: {
+    badgeClass:
+      "border-slate-700/70 bg-slate-900/40 text-slate-400 shadow-none",
+    dotClass: "bg-slate-500",
+    prefix: "APPROVED",
+    label: "Approved",
+  },
+  rejected: {
+    badgeClass:
+      "border-emerald-400/60 bg-emerald-400/15 text-emerald-300 shadow-[0_0_15px_rgba(0,255,136,0.2)]",
+    dotClass: "bg-emerald-400",
+    prefix: "REJECTED",
+    label: "Rejected",
+  },
 };
 
 interface StatusBadgeProps {

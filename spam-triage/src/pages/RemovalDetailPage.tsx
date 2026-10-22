@@ -51,6 +51,7 @@ export default function RemovalDetailPage() {
     contestDeadline: string;
     contestCount: number;
     contestWindowOpen: boolean;
+    reviewRequired: boolean;
   } | null>(null);
 
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -91,6 +92,7 @@ export default function RemovalDetailPage() {
         contestDeadline: res.contestDeadline,
         contestCount: res.contestCount,
         contestWindowOpen: res.contestWindowOpen,
+        reviewRequired: res.reviewRequired,
       });
     } catch (e) {
       setDetailError(e);
@@ -252,6 +254,14 @@ export default function RemovalDetailPage() {
                   : "[WINDOW CLOSED // FINAL DISPOSITION]"}
               </span>
             </div>
+
+            {detail.reviewRequired && (
+              <div className="rounded-sm border border-purple-500/30 bg-purple-950/20 p-3 font-mono text-xs text-purple-200">
+                This number has verified spam confidence. If the request is
+                uncontested, it is routed to operator review instead of
+                auto-removal.
+              </div>
+            )}
           </CardBody>
         </Card>
       )}

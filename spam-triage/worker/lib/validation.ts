@@ -26,13 +26,12 @@ export const contestReasons = [
   "other",
 ] as const;
 
-export const numberStatuses = [
-  "pending",
-  "suspected",
-  "verified_spam",
-  "under_removal_review",
-  "removed",
-  "disputed",
+export const removalRequestStatuses = [
+  "open",
+  "pending_review",
+  "approved",
+  "rejected",
+  "contested",
 ] as const;
 
 const phoneNumberSchema = z.string().trim().min(1).max(40);
@@ -60,13 +59,6 @@ export const CheckQuerySchema = z
   })
   .strict();
 
-export const AdminLoginBodySchema = z
-  .object({
-    password: z.string().min(1).max(256),
-    turnstileToken: turnstileTokenSchema,
-  })
-  .strict();
-
 export const RemovalRequestBodySchema = z
   .object({
     phoneNumber: phoneNumberSchema,
@@ -86,5 +78,20 @@ export const ContestBodySchema = z
 export const AdminResolveBodySchema = z
   .object({
     action: z.enum(["approve_removal", "reject_removal", "mark_disputed"]),
+  })
+  .strict();
+
+export const AdminListQuerySchema = z
+  .object({
+    status: z.enum([...removalRequestStatuses, "active", "all"]).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(100),
+    offset: z.coerce.number().int().min(0).default(0),
+  })
+  .strict();
+
+export const AdminExportQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(1_000).default(500),
+    offset: z.coerce.number().int().min(0).default(0),
   })
   .strict();

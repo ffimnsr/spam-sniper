@@ -38,10 +38,32 @@ export function parseApiError(err: unknown): ParsedError {
         suggestion: "Please verify all required fields are filled correctly.",
       };
     case "UNAUTHORIZED":
+    case "FORBIDDEN":
       return {
-        code: "UNAUTHORIZED",
-        message: "Operator clearance denied. Access key rejected.",
-        suggestion: "Ensure your secret operator passkey is correct.",
+        code,
+        message: "Cloudflare Access authentication is required.",
+        suggestion:
+          "Authenticate through the Access policy for this hostname, then reload the page.",
+      };
+    case "INVALID_RESPONSE":
+      return {
+        code: "INVALID_RESPONSE",
+        message: "The server returned an unexpected response.",
+        suggestion:
+          "If the admin console is behind Cloudflare Access, complete the Access login and reload.",
+      };
+    case "REMOVAL_COOLDOWN":
+      return {
+        code: "REMOVAL_COOLDOWN",
+        message: "A recent removal request for this number was rejected.",
+        suggestion:
+          "Wait for the cooldown period before submitting another removal request.",
+      };
+    case "REMOVAL_RATE_LIMITED":
+      return {
+        code: "REMOVAL_RATE_LIMITED",
+        message: "Too many removal requests from this reporter today.",
+        suggestion: "Try again after the daily limit resets.",
       };
     case "NOT_FOUND":
       return {
@@ -68,12 +90,45 @@ export function parseApiError(err: unknown): ParsedError {
         suggestion:
           "Each reporter may only register one challenge per request.",
       };
+    case "DUPLICATE_REMOVAL_REQUEST":
     case "REMOVAL_REQUEST_EXISTS":
       return {
-        code: "REMOVAL_REQUEST_EXISTS",
+        code,
         message: "An active removal request already exists for this number.",
         suggestion:
           "Check the removal status tracking page to follow the existing request.",
+      };
+    case "REMOVAL_UNDER_REVIEW":
+      return {
+        code,
+        message: "This number is already under removal review.",
+        suggestion:
+          "Wait for the operator decision or use the existing tracking link.",
+      };
+    case "NUMBER_NOT_REPORTED":
+      return {
+        code,
+        message: "This number has no community reports to remove.",
+        suggestion:
+          "Submit a spam report first if the number is actively calling.",
+      };
+    case "NOT_CONTESTABLE":
+      return {
+        code,
+        message: "This removal request is no longer open for contest.",
+        suggestion: "The challenge window has closed or a decision is pending.",
+      };
+    case "INVALID_STATE":
+      return {
+        code,
+        message: rawMsg,
+        suggestion: "Reload the queue and try again.",
+      };
+    case "RATE_LIMITED":
+      return {
+        code: "RATE_LIMITED",
+        message: "Too many requests from this connection.",
+        suggestion: "Wait a minute before trying again.",
       };
     case "PAYLOAD_TOO_LARGE":
       return {
