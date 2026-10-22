@@ -202,7 +202,7 @@ export default function RemovalDetailPage() {
               <StatusBadge status={detail.status} />
             </div>
 
-            <div className="rounded-sm border border-cyan-500/30 bg-[#060a16] p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="rounded-sm border border-cyan-500/30 bg-[var(--cp-bg)] p-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <span className="font-mono text-xs text-slate-400 block mb-1">
                   TARGET SIGNATURE
@@ -212,6 +212,7 @@ export default function RemovalDetailPage() {
                     text={detail.maskedNumber}
                     as="span"
                     scrambleOnHover={false}
+                    autoGlitch={false}
                   />
                 </span>
               </div>
@@ -224,12 +225,12 @@ export default function RemovalDetailPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
-              <div className="rounded-sm border border-cyan-500/20 bg-[#060c18] p-3 space-y-1">
+              <div className="rounded-sm border border-cyan-500/20 bg-[var(--cp-surface)] p-3 space-y-1">
                 <span className="text-slate-500">SUBMISSION REASON:</span>
                 <p className="font-bold text-slate-200">{detail.reason}</p>
               </div>
 
-              <div className="rounded-sm border border-cyan-500/20 bg-[#060c18] p-3 space-y-1">
+              <div className="rounded-sm border border-cyan-500/20 bg-[var(--cp-surface)] p-3 space-y-1">
                 <span className="text-slate-500">CHALLENGE DEADLINE:</span>
                 <p className="font-bold text-slate-200">
                   {new Date(detail.contestDeadline).toLocaleDateString()}
@@ -237,11 +238,13 @@ export default function RemovalDetailPage() {
               </div>
             </div>
 
-            <div className="rounded-sm border border-cyan-500/20 bg-[#070e1c] p-3 font-mono text-xs flex items-center justify-between">
+            <div className="rounded-sm border border-cyan-500/20 bg-[var(--cp-surface)] p-3 font-mono text-xs flex items-center justify-between">
               <span className="text-slate-400">CHALLENGE WINDOW STATUS:</span>
               <span
                 className={`font-bold ${
-                  detail.contestWindowOpen ? "text-[#00ff9d]" : "text-slate-500"
+                  detail.contestWindowOpen
+                    ? "text-[var(--cp-green)]"
+                    : "text-slate-500"
                 }`}
               >
                 {detail.contestWindowOpen
@@ -259,7 +262,7 @@ export default function RemovalDetailPage() {
           <CardBody className="space-y-4">
             <div className="space-y-1 border-b border-cyan-500/20 pb-3">
               <p className="page-eyebrow">COUNTER-INTEL // DISPUTE REMOVAL</p>
-              <h2 className="text-xl font-bold font-orbitron text-white">
+              <h2 className="text-xl font-bold font-display text-white">
                 CHALLENGE THIS REMOVAL REQUEST.
               </h2>
               <p className="font-mono text-xs text-slate-400">
@@ -286,7 +289,7 @@ export default function RemovalDetailPage() {
                   onError={() => setValue("turnstileToken", "")}
                 />
                 {errors.turnstileToken && (
-                  <p className="font-mono text-xs text-[#ff3377]">
+                  <p className="font-mono text-xs text-[var(--cp-pink)]">
                     <span>[ERR]</span> {errors.turnstileToken.message}
                   </p>
                 )}
@@ -310,8 +313,8 @@ export default function RemovalDetailPage() {
             )}
 
             {contestResult && (
-              <div className="rounded-sm border border-[#00ff9d]/50 bg-[#042014]/90 p-4 font-mono text-xs text-emerald-200">
-                <p className="font-bold text-[#00ff9d] flex items-center gap-2">
+              <div className="rounded-sm border border-emerald-400/50 bg-[var(--cp-bg)] p-4 font-mono text-xs text-emerald-200">
+                <p className="font-bold text-[var(--cp-green)] flex items-center gap-2">
                   <span>✓</span> CONTEST CHALLENGE COMMITTED.
                 </p>
                 <p className="mt-1 text-slate-300">

@@ -26,25 +26,25 @@ export function CyberAlert({
   const isWarning = type === "warning";
 
   const borderColor = isError
-    ? "border-[#ff0055]/60 bg-[#260513]/90 text-red-200 shadow-[0_0_20px_rgba(255,0,85,0.2)]"
+    ? "border-pink-400/60 bg-[#1c0410]/90 text-pink-200 shadow-[0_0_20px_rgba(255,42,109,0.2)]"
     : isSuccess
-      ? "border-[#00ff9d]/60 bg-[#042014]/90 text-emerald-200 shadow-[0_0_20px_rgba(0,255,157,0.2)]"
+      ? "border-emerald-400/60 bg-[#001f10]/90 text-emerald-200 shadow-[0_0_20px_rgba(0,255,136,0.2)]"
       : isWarning
-        ? "border-amber-500/60 bg-[#231505]/90 text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.2)]"
-        : "border-cyan-500/60 bg-[#071626]/90 text-cyan-200 shadow-[0_0_20px_rgba(0,240,255,0.2)]";
+        ? "border-amber-400/60 bg-[#1e1a00]/90 text-amber-200 shadow-[0_0_20px_rgba(255,230,0,0.18)]"
+        : "border-cyan-500/60 bg-[#041018]/90 text-cyan-200 shadow-[0_0_20px_rgba(0,240,255,0.2)]";
 
   const badgeColor = isError
-    ? "bg-[#ff0055] text-white"
+    ? "bg-pink-400 text-black"
     : isSuccess
-      ? "bg-[#00ff9d] text-slate-950 font-bold"
+      ? "bg-emerald-400 text-black font-bold"
       : isWarning
-        ? "bg-amber-400 text-slate-950 font-bold"
-        : "bg-cyan-400 text-slate-950 font-bold";
+        ? "bg-amber-400 text-black font-bold"
+        : "bg-cyan-400 text-black font-bold";
 
   return (
     <div
       role="alert"
-      className={`relative overflow-hidden rounded-sm border p-4 font-mono text-sm backdrop-blur-md transition-all ${borderColor} ${className}`}
+      className={`relative overflow-hidden border p-4 font-mono text-sm backdrop-blur-md transition-all ${borderColor} ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
@@ -54,7 +54,7 @@ export function CyberAlert({
             >
               [{parsed.code}]
             </span>
-            <span className="font-rajdhani text-sm font-bold tracking-wide">
+            <span className="font-mono text-sm font-bold tracking-wide">
               {isError
                 ? "TELEMETRY REJECTION"
                 : isSuccess

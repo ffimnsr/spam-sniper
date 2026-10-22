@@ -142,7 +142,7 @@ export default function ReportPage() {
           <p className="page-eyebrow">
             BROADCAST SIGNAL // INCIDENT TRANSMISSION
           </p>
-          <span className="font-mono text-xs text-[#ff0055] bg-pink-950/40 border border-[#ff0055]/30 px-2 py-0.5 rounded-xs">
+          <span className="font-mono text-xs text-[var(--cp-pink)] bg-pink-950/40 border border-pink-400/30 px-2 py-0.5 rounded-xs">
             THREAT_INTAKE: READY
           </span>
         </div>
@@ -179,8 +179,9 @@ export default function ReportPage() {
 
             {/* Cyber Threat Category Selector */}
             <div className="space-y-2">
-              <label className="flex items-center gap-1.5 font-rajdhani text-xs font-bold uppercase tracking-wider text-cyan-400">
-                <span className="text-[#ff0055]">//</span> THREAT CLASSIFICATION
+              <label className="flex items-center gap-1.5 font-sans text-xs font-bold uppercase tracking-wider text-cyan-400">
+                <span className="text-[var(--cp-pink)]">//</span> THREAT
+                CLASSIFICATION
               </label>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -197,8 +198,8 @@ export default function ReportPage() {
                       onMouseEnter={() => soundFx.hover()}
                       className={`text-left p-3 rounded-sm border transition-all font-mono text-xs cursor-pointer ${
                         isSelected
-                          ? "border-[#ff0055] bg-[#ff0055]/15 text-white shadow-[0_0_15px_rgba(255,0,85,0.3)]"
-                          : "border-cyan-500/20 bg-[#060a16] text-slate-300 hover:border-cyan-400/50 hover:bg-[#080e22]"
+                          ? "border-pink-400 bg-pink-400/15 text-white shadow-[0_0_15px_rgba(255,0,85,0.3)]"
+                          : "border-cyan-500/20 bg-[var(--cp-bg)] text-slate-300 hover:border-cyan-400/50 hover:bg-[var(--cp-bg)]"
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -206,7 +207,7 @@ export default function ReportPage() {
                           {cat.label}
                         </span>
                         {isSelected && (
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#ff0055] shadow-[0_0_6px_#ff0055]" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-pink-400 shadow-[0_0_6px_var(--cp-pink)]" />
                         )}
                       </div>
                       <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
@@ -217,7 +218,7 @@ export default function ReportPage() {
                 })}
               </div>
               {errors.category && (
-                <p className="font-mono text-xs text-[#ff3377]">
+                <p className="font-mono text-xs text-[var(--cp-pink)]">
                   <span>[ERR]</span> {errors.category.message}
                 </p>
               )}
@@ -232,7 +233,7 @@ export default function ReportPage() {
                 onError={() => setValue("turnstileToken", "")}
               />
               {errors.turnstileToken && (
-                <p className="font-mono text-xs text-[#ff3377]">
+                <p className="font-mono text-xs text-[var(--cp-pink)]">
                   <span>[ERR]</span> {errors.turnstileToken.message}
                 </p>
               )}
@@ -256,7 +257,7 @@ export default function ReportPage() {
 
       {/* Report Result Confirmation */}
       {result && (
-        <Card className="max-w-2xl border-[#ff0055]/50 shadow-[0_0_30px_rgba(255,0,85,0.15)]">
+        <Card className="max-w-2xl border-pink-400/50 shadow-[0_0_30px_rgba(255,0,85,0.15)]">
           <CardBody className="space-y-4">
             <div className="flex items-center justify-between border-b border-cyan-500/20 pb-3">
               <span className="font-mono text-xs uppercase tracking-wider text-cyan-400">
@@ -264,7 +265,7 @@ export default function ReportPage() {
               </span>
               <span
                 className={`font-mono text-xs font-bold ${
-                  result.duplicate ? "text-amber-400" : "text-[#00ff9d]"
+                  result.duplicate ? "text-amber-400" : "text-[var(--cp-green)]"
                 }`}
               >
                 {result.duplicate
@@ -273,7 +274,7 @@ export default function ReportPage() {
               </span>
             </div>
 
-            <div className="rounded-sm border border-cyan-500/30 bg-[#060a16] p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="rounded-sm border border-cyan-500/30 bg-[var(--cp-bg)] p-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <span className="font-mono text-xs text-slate-400 block mb-1">
                   TARGET SIGNATURE
@@ -283,6 +284,7 @@ export default function ReportPage() {
                     text={result.maskedNumber || ""}
                     as="span"
                     scrambleOnHover={false}
+                    autoGlitch={false}
                   />
                 </span>
               </div>

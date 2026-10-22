@@ -77,10 +77,8 @@ export function PhoneInput({
   return (
     <div className="space-y-1.5 font-mono">
       {label && (
-        <label className="flex items-center justify-between font-rajdhani text-xs font-bold uppercase tracking-wider text-cyan-400">
-          <span className="flex items-center gap-1.5">
-            <span className="text-[#ff0055]">//</span> {label}
-          </span>
+        <label className="flex items-center justify-between font-mono text-xs font-bold uppercase tracking-wider text-cyan-400">
+          <span className="cyber-label">{label}</span>
           <span className="text-slate-500 font-mono text-[10px]">
             [REGION: {selectedCountry}]
           </span>
@@ -94,13 +92,13 @@ export function PhoneInput({
             value={selectedCountry}
             onChange={handleCountrySelect}
             disabled={disabled}
-            className="w-full appearance-none rounded-sm border border-cyan-500/30 bg-[#060a16] px-3 py-2.5 pr-7 font-mono text-xs text-cyan-200 outline-none transition-all focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/50 cursor-pointer disabled:opacity-50"
+            className="cyber-select w-full pl-3 pr-7 text-xs text-cyan-200 disabled:opacity-50"
           >
             {POPULAR_COUNTRIES.map((c) => (
               <option
                 key={c.code}
                 value={c.code}
-                className="bg-[#090f1e] text-slate-100"
+                className="bg-[var(--cp-surface)] text-slate-100"
               >
                 {c.code} ({c.dial})
               </option>
@@ -125,10 +123,8 @@ export function PhoneInput({
             onChange={handleInputChange}
             disabled={disabled}
             placeholder={placeholder || defaultPlaceholder}
-            className={`w-full rounded-sm border bg-[#060a16] px-4 py-2.5 font-mono text-sm text-slate-100 placeholder:text-slate-600 transition-all outline-none disabled:opacity-50 ${
-              error
-                ? "border-[#ff0055]/70 focus:border-[#ff0055] focus:ring-1 focus:ring-[#ff0055]/50 text-red-100"
-                : "border-cyan-500/30 focus:border-cyan-400 focus:bg-[#080e20] focus:ring-1 focus:ring-cyan-400/50 focus:shadow-[0_0_15px_rgba(0,240,255,0.25)]"
+            className={`cyber-input w-full px-4 py-2.5 text-sm disabled:opacity-50 ${
+              error ? "cyber-input--error text-red-100" : ""
             }`}
           />
         </div>
@@ -138,13 +134,13 @@ export function PhoneInput({
       {value.trim() && (
         <div className="flex flex-wrap items-center justify-between text-xs pt-0.5">
           {validation.isValid ? (
-            <span className="flex items-center gap-1.5 text-[#00ff9d]">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#00ff9d] shadow-[0_0_6px_#00ff9d]" />
+            <span className="flex items-center gap-1.5 text-emerald-400">
+              <span className="h-1.5 w-1.5 bg-emerald-400 shadow-[0_0_6px_#00ff88]" />
               VALID E.164: {validation.e164}
             </span>
           ) : (
             <span className="flex items-center gap-1.5 text-amber-400/90">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              <span className="h-1.5 w-1.5 bg-amber-400" />
               Awaiting standard format digits
             </span>
           )}
@@ -162,7 +158,7 @@ export function PhoneInput({
       )}
 
       {error && (
-        <p className="flex items-center gap-1 font-mono text-xs text-[#ff3377]">
+        <p className="cyber-field-error">
           <span>[ERR]</span> {error}
         </p>
       )}

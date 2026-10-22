@@ -75,22 +75,22 @@ export function CyberReticle({
       {/* Corner targeting notches */}
       <path
         d="M10 14L8 14L8 10L12 10L12 12"
-        stroke="#ff0055"
+        stroke="var(--cp-pink)"
         strokeWidth="1.5"
       />
       <path
         d="M38 14L40 14L40 10L36 10L36 12"
-        stroke="#ff0055"
+        stroke="var(--cp-pink)"
         strokeWidth="1.5"
       />
       <path
         d="M10 34L8 34L8 38L12 38L12 36"
-        stroke="#ff0055"
+        stroke="var(--cp-pink)"
         strokeWidth="1.5"
       />
       <path
         d="M38 34L40 34L40 38L36 38L36 36"
-        stroke="#ff0055"
+        stroke="var(--cp-pink)"
         strokeWidth="1.5"
       />
     </svg>

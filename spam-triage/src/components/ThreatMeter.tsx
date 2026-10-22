@@ -13,15 +13,15 @@ export function ThreatMeter({
 }: ThreatMeterProps) {
   let level = 0;
   let levelName = "CLEAN // SECURE";
-  let color = "text-[#00ff9d]";
-  let barActiveColor = "bg-[#00ff9d] shadow-[0_0_10px_#00ff9d]";
+  let color = "text-emerald-400";
+  let barActiveColor = "bg-emerald-400 shadow-[0_0_10px_#00ff88]";
   let description = "No hostile spam signals logged for this number.";
 
   if (!found) {
     level = 0;
     levelName = "CLEAN RECORD";
-    color = "text-[#00ff9d]";
-    barActiveColor = "bg-[#00ff9d] shadow-[0_0_10px_#00ff9d]";
+    color = "text-emerald-400";
+    barActiveColor = "bg-emerald-400 shadow-[0_0_10px_#00ff88]";
     description = "No prior spam signatures detected in database.";
   } else if (status === "removed") {
     level = 0;
@@ -32,15 +32,15 @@ export function ThreatMeter({
   } else if (status === "verified_spam") {
     level = 3;
     levelName = "LEVEL 3 // CRITICAL THREAT";
-    color = "text-[#ff0055]";
-    barActiveColor = "bg-[#ff0055] shadow-[0_0_12px_#ff0055]";
+    color = "text-pink-400";
+    barActiveColor = "bg-pink-400 shadow-[0_0_12px_#ff2a6d]";
     description =
       "High-confidence verified spam target confirmed by multiple independent reporters.";
   } else if (status === "suspected") {
     level = 2;
     levelName = "LEVEL 2 // ELEVATED THREAT";
     color = "text-amber-400";
-    barActiveColor = "bg-amber-400 shadow-[0_0_12px_#f59e0b]";
+    barActiveColor = "bg-amber-400 shadow-[0_0_12px_#ffe600]";
     description =
       "Multiple spam incidents registered. High probability of malicious campaign.";
   } else if (status === "pending") {
@@ -54,20 +54,20 @@ export function ThreatMeter({
     level = 1;
     levelName = "DISPUTE IN PROGRESS";
     color = "text-purple-400";
-    barActiveColor = "bg-purple-400 shadow-[0_0_10px_#a855f7]";
+    barActiveColor = "bg-purple-400 shadow-[0_0_10px_#a45cff]";
     description = "Removal contest window active. Target under review.";
   } else if (status === "disputed") {
     level = 2;
     levelName = "CONTESTED THREAT";
     color = "text-yellow-400";
-    barActiveColor = "bg-yellow-400 shadow-[0_0_10px_#eab308]";
+    barActiveColor = "bg-yellow-400 shadow-[0_0_10px_#ffe600]";
     description =
       "Contested by multiple parties. Locked awaiting administrative decision.";
   }
 
   return (
-    <div className="rounded-sm border border-cyan-500/20 bg-[#070d1a] p-4 font-mono">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-500/15 pb-2.5">
+    <div className="cyber-inset p-4 font-mono">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-cyan-500/20 pb-2.5 font-mono">
         <span className="text-xs uppercase tracking-widest text-slate-400">
           Target Threat Assessment
         </span>
@@ -83,7 +83,7 @@ export function ThreatMeter({
           return (
             <div
               key={step}
-              className={`h-2 rounded-xs transition-all duration-300 ${
+              className={`h-2 transition-all duration-300 ${
                 isActive ? barActiveColor : "bg-slate-800/80"
               }`}
             />

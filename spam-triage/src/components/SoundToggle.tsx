@@ -19,32 +19,32 @@ export function SoundToggle() {
       onClick={handleToggle}
       onMouseEnter={() => soundFx.hover()}
       title={enabled ? "Mute Cyber Audio FX" : "Enable Cyber Audio FX"}
-      className={`group relative flex items-center gap-2 rounded-xs border px-2.5 py-1 font-mono text-xs transition-all duration-200 outline-none cursor-pointer ${
+      className={`group relative flex cursor-pointer items-center gap-2 border px-2.5 py-1 font-mono text-[11px] tracking-wider uppercase transition-all duration-200 outline-none ${
         enabled
           ? "border-cyan-400/80 bg-cyan-950/40 text-cyan-300 shadow-[0_0_12px_rgba(0,240,255,0.3)]"
-          : "border-slate-700 bg-[#060b17] text-slate-500 hover:border-slate-500 hover:text-slate-300"
+          : "border-slate-700 bg-[#041018] text-slate-500 hover:border-slate-500 hover:text-slate-300"
       }`}
     >
       {/* Equalizer Audio Waves */}
       <div className="flex items-end gap-0.5 h-3">
         <span
-          className={`w-0.5 rounded-xs transition-all ${
+          className={`w-0.5 transition-all ${
             enabled
               ? "bg-cyan-400 h-2.5 animate-[equalizer_0.8s_ease-in-out_infinite]"
               : "bg-slate-600 h-1"
           }`}
         />
         <span
-          className={`w-0.5 rounded-xs transition-all ${
+          className={`w-0.5 transition-all ${
             enabled
               ? "bg-cyan-400 h-3 animate-[equalizer_0.6s_ease-in-out_infinite_0.2s]"
               : "bg-slate-600 h-2"
           }`}
         />
         <span
-          className={`w-0.5 rounded-xs transition-all ${
+          className={`w-0.5 transition-all ${
             enabled
-              ? "bg-[#ff0055] h-1.5 animate-[equalizer_0.7s_ease-in-out_infinite_0.4s]"
+              ? "bg-[#ff2a6d] h-1.5 animate-[equalizer_0.7s_ease-in-out_infinite_0.4s]"
               : "bg-slate-600 h-1"
           }`}
         />

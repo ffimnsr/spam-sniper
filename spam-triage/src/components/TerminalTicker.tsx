@@ -16,13 +16,13 @@ export function TerminalTicker() {
   }, []);
 
   return (
-    <div className="w-full overflow-hidden border-b border-cyan-500/15 bg-[#03060e] py-1 px-4 font-mono text-[10px] text-slate-400 select-none">
+    <div className="w-full select-none overflow-hidden border-b border-cyan-500/15 bg-[#03080c] px-4 py-1 font-mono text-[10px] text-slate-400">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
         {/* Live System Timestamp */}
         <div className="flex items-center gap-2 shrink-0">
           <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00ff9d] opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#00ff9d]" />
+            <span className="absolute inline-flex h-full w-full animate-ping bg-[#00ff88] opacity-75" />
+            <span className="relative inline-flex h-1.5 w-1.5 bg-[#00ff88]" />
           </span>
           <span className="text-cyan-400 font-bold tracking-wider">
             SYS_CLOCK:
@@ -40,14 +40,14 @@ export function TerminalTicker() {
           </span>
           <span className="text-cyan-500/40">//</span>
           <span>
-            SHIELD_HEALTH: <span className="text-[#00ff9d]">100% ONLINE</span>
+            SHIELD_HEALTH: <span className="text-[#00ff88]">100% ONLINE</span>
           </span>
           <span className="text-cyan-500/40">//</span>
           <span>
             ANOMALY_INDEX: <span className="text-cyan-300">0.038</span>
           </span>
           <span className="text-cyan-500/40">//</span>
-          <span className="text-[#ff0055] font-bold animate-pulse">
+          <span className="text-[#ff2a6d] font-bold animate-pulse">
             DEFENSE_MATRIX: ACTIVE
           </span>
         </div>

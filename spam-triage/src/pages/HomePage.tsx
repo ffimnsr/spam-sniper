@@ -36,7 +36,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="hidden md:flex flex-col items-center justify-center p-4 rounded-md border border-cyan-500/20 bg-[#070e1c]/60 backdrop-blur-md shadow-[0_0_25px_rgba(0,240,255,0.1)]">
+          <div className="hidden md:flex flex-col items-center justify-center p-4 rounded-md border border-cyan-500/20 bg-[var(--cp-surface)] backdrop-blur-md shadow-[0_0_25px_rgba(0,240,255,0.1)]">
             <TargetingRadar size={130} />
             <span className="font-mono text-[10px] text-cyan-400 mt-2 tracking-widest animate-pulse">
               [SYSTEM_LOCK: READY]
@@ -74,7 +74,7 @@ export default function HomePage() {
                 [CONFIDENCE_LADDER]
               </span>
             </div>
-            <h2 className="text-xl font-bold font-orbitron text-white">
+            <h2 className="text-xl font-bold font-display text-white">
               <GlitchText text="Unique Node Verification." as="span" />
             </h2>
             <p className="text-sm leading-relaxed text-slate-300">
@@ -93,7 +93,7 @@ export default function HomePage() {
                 [CONTEST_WINDOW]
               </span>
             </div>
-            <h2 className="text-xl font-bold font-orbitron text-white">
+            <h2 className="text-xl font-bold font-display text-white">
               <GlitchText text="7-Day Public Challenge." as="span" />
             </h2>
             <p className="text-sm leading-relaxed text-slate-300">
@@ -104,15 +104,15 @@ export default function HomePage() {
           </CardBody>
         </Card>
 
-        <Card className="hover:border-[#ff0055]/50 transition-colors">
+        <Card className="hover:border-pink-400/50 transition-colors">
           <CardBody className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="page-eyebrow">PROTOCOL 03</p>
-              <span className="font-mono text-[10px] text-[#ff0055]">
+              <span className="font-mono text-[10px] text-[var(--cp-pink)]">
                 [ZERO_FOOTPRINT]
               </span>
             </div>
-            <h2 className="text-xl font-bold font-orbitron text-white">
+            <h2 className="text-xl font-bold font-display text-white">
               <GlitchText text="Zero User Tracking." as="span" />
             </h2>
             <p className="text-sm leading-relaxed text-slate-300">
@@ -129,7 +129,7 @@ export default function HomePage() {
         <CardBody className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
           <div className="space-y-3">
             <p className="page-eyebrow">OPERATIONAL SEQUENCE</p>
-            <h2 className="text-2xl font-bold font-orbitron text-white tracking-wide">
+            <h2 className="text-2xl font-bold font-display text-white tracking-wide">
               INTERCEPT FIRST. NEUTRALIZE NEXT.
             </h2>
             <p className="text-sm leading-relaxed text-slate-300 max-w-lg">
@@ -140,7 +140,7 @@ export default function HomePage() {
           </div>
 
           <div className="grid gap-3 font-mono text-xs text-slate-300">
-            <div className="rounded-sm border border-cyan-500/20 bg-[#060b17] p-3.5 flex items-start gap-3">
+            <div className="rounded-sm border border-cyan-500/20 bg-[var(--cp-surface)] p-3.5 flex items-start gap-3">
               <span className="text-cyan-400 font-bold">01 //</span>
               <div>
                 <p className="font-bold text-white">SCAN CALLER STATUS</p>
@@ -150,8 +150,8 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="rounded-sm border border-[#ff0055]/30 bg-[#060b17] p-3.5 flex items-start gap-3">
-              <span className="text-[#ff0055] font-bold">02 //</span>
+            <div className="rounded-sm border border-pink-400/30 bg-[var(--cp-surface)] p-3.5 flex items-start gap-3">
+              <span className="text-[var(--cp-pink)] font-bold">02 //</span>
               <div>
                 <p className="font-bold text-white">DISPATCH SPAM SIGNAL</p>
                 <p className="text-slate-400 text-[11px] mt-0.5">
@@ -161,7 +161,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="rounded-sm border border-amber-500/25 bg-[#060b17] p-3.5 flex items-start gap-3">
+            <div className="rounded-sm border border-amber-500/25 bg-[var(--cp-surface)] p-3.5 flex items-start gap-3">
               <span className="text-amber-400 font-bold">03 //</span>
               <div>
                 <p className="font-bold text-white">CHALLENGE & REMOVE</p>

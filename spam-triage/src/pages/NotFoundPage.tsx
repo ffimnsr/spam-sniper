@@ -11,20 +11,20 @@ export default function NotFoundPage() {
 
   return (
     <div className="page-stack max-w-2xl mx-auto py-12">
-      <section className="page-hero border-[#ff0055]/50 shadow-[0_0_35px_rgba(255,0,85,0.25)] relative overflow-hidden">
+      <section className="page-hero border-pink-400/50 shadow-[0_0_35px_rgba(255,0,85,0.25)] relative overflow-hidden">
         {/* Anomaly static lines */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,0,85,0.03)_1px,transparent_1px)] bg-[size:100%_3px] pointer-events-none" />
 
         <div className="flex items-center justify-between">
-          <p className="page-eyebrow text-[#ff0055]">
+          <p className="page-eyebrow text-[var(--cp-pink)]">
             [ANOMALY // 404_SECTOR_UNREACHABLE]
           </p>
-          <span className="font-mono text-xs text-[#ff0055] bg-pink-950/40 border border-[#ff0055]/30 px-2 py-0.5 rounded-xs animate-pulse">
+          <span className="font-mono text-xs text-[var(--cp-pink)] bg-pink-950/40 border border-pink-400/30 px-2 py-0.5 rounded-xs animate-pulse">
             SIGNAL_LOST
           </span>
         </div>
 
-        <h1 className="page-title text-[#ff3377] mt-3">
+        <h1 className="page-title text-[var(--cp-pink)] mt-3">
           <GlitchText text="ROUTE NOT FOUND." as="span" chromatic={true} />
         </h1>
 

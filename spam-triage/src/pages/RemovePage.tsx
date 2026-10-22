@@ -130,7 +130,7 @@ export default function RemovePage() {
       </section>
 
       {/* Protocol Notice */}
-      <div className="rounded-sm border border-cyan-500/20 bg-[#060b17] p-4 font-mono text-xs text-slate-300 space-y-1">
+      <div className="rounded-sm border border-cyan-500/20 bg-[var(--cp-surface)] p-4 font-mono text-xs text-slate-300 space-y-1">
         <p className="text-cyan-400 font-bold flex items-center gap-1.5">
           <span>ℹ</span> REMOVAL POLICY PROTOCOL
         </p>
@@ -177,7 +177,7 @@ export default function RemovePage() {
                 onError={() => setValue("turnstileToken", "")}
               />
               {errors.turnstileToken && (
-                <p className="font-mono text-xs text-[#ff3377]">
+                <p className="font-mono text-xs text-[var(--cp-pink)]">
                   <span>[ERR]</span> {errors.turnstileToken.message}
                 </p>
               )}
@@ -212,7 +212,7 @@ export default function RemovePage() {
               </span>
             </div>
 
-            <div className="rounded-sm border border-cyan-500/30 bg-[#060a16] p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="rounded-sm border border-cyan-500/30 bg-[var(--cp-bg)] p-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <span className="font-mono text-xs text-slate-400 block mb-1">
                   TARGET SIGNATURE
@@ -222,6 +222,7 @@ export default function RemovePage() {
                     text={result.maskedNumber || ""}
                     as="span"
                     scrambleOnHover={false}
+                    autoGlitch={false}
                   />
                 </span>
               </div>

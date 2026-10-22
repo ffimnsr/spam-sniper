@@ -190,7 +190,7 @@ export default function AdminPage() {
       <section className="page-hero">
         <div className="flex items-center justify-between">
           <p className="page-eyebrow">COMMAND DECK // SYSTEM OVERSEER</p>
-          <span className="font-mono text-xs text-[#00ff9d] bg-emerald-950/40 border border-[#00ff9d]/30 px-2 py-0.5 rounded-xs">
+          <span className="font-mono text-xs text-[var(--cp-green)] bg-emerald-950/40 border border-emerald-400/30 px-2 py-0.5 rounded-xs">
             CLEARANCE: OPERATOR
           </span>
         </div>
@@ -211,7 +211,7 @@ export default function AdminPage() {
               <span className="text-xs uppercase text-slate-400">
                 Total Numbers
               </span>
-              <p className="text-3xl font-bold font-orbitron text-cyan-300">
+              <p className="text-3xl font-bold font-display text-cyan-300">
                 {summary.totalNumbers}
               </p>
             </CardBody>
@@ -222,7 +222,7 @@ export default function AdminPage() {
               <span className="text-xs uppercase text-slate-400">
                 Pending Review
               </span>
-              <p className="text-3xl font-bold font-orbitron text-cyan-400">
+              <p className="text-3xl font-bold font-display text-cyan-400">
                 {summary.pending}
               </p>
             </CardBody>
@@ -233,18 +233,18 @@ export default function AdminPage() {
               <span className="text-xs uppercase text-slate-400">
                 Suspected Spam
               </span>
-              <p className="text-3xl font-bold font-orbitron text-amber-400">
+              <p className="text-3xl font-bold font-display text-amber-400">
                 {summary.suspected}
               </p>
             </CardBody>
           </Card>
 
-          <Card className="border-[#ff0055]/40">
+          <Card className="border-pink-400/40">
             <CardBody className="space-y-1">
               <span className="text-xs uppercase text-slate-400">
                 Verified Spam
               </span>
-              <p className="text-3xl font-bold font-orbitron text-[#ff0055]">
+              <p className="text-3xl font-bold font-display text-[var(--cp-pink)]">
                 {summary.verifiedSpam}
               </p>
             </CardBody>
@@ -255,7 +255,7 @@ export default function AdminPage() {
               <span className="text-xs uppercase text-slate-400">
                 Under Delist Review
               </span>
-              <p className="text-3xl font-bold font-orbitron text-purple-400">
+              <p className="text-3xl font-bold font-display text-purple-400">
                 {summary.underRemovalReview}
               </p>
             </CardBody>
@@ -266,7 +266,7 @@ export default function AdminPage() {
               <span className="text-xs uppercase text-slate-400">
                 Contested / Disputed
               </span>
-              <p className="text-3xl font-bold font-orbitron text-yellow-400">
+              <p className="text-3xl font-bold font-display text-yellow-400">
                 {summary.disputed}
               </p>
             </CardBody>
@@ -277,7 +277,7 @@ export default function AdminPage() {
               <span className="text-xs uppercase text-slate-400">
                 Purged / Removed
               </span>
-              <p className="text-3xl font-bold font-orbitron text-slate-400">
+              <p className="text-3xl font-bold font-display text-slate-400">
                 {summary.removed}
               </p>
             </CardBody>
@@ -288,7 +288,7 @@ export default function AdminPage() {
               <span className="text-xs uppercase text-slate-400">
                 Open Removal Cases
               </span>
-              <p className="text-3xl font-bold font-orbitron text-amber-300">
+              <p className="text-3xl font-bold font-display text-amber-300">
                 {summary.openRemovalRequests}
               </p>
             </CardBody>
@@ -302,7 +302,7 @@ export default function AdminPage() {
           <div className="flex items-center justify-between border-b border-cyan-500/20 pb-3">
             <div>
               <p className="page-eyebrow">TELEMETRY SYNC // BLOCKLIST EXPORT</p>
-              <h2 className="text-xl font-bold font-orbitron text-white mt-1">
+              <h2 className="text-xl font-bold font-display text-white mt-1">
                 Verified Spam Blocklist.
               </h2>
             </div>
@@ -358,7 +358,7 @@ export default function AdminPage() {
           </div>
 
           {exportData && (
-            <div className="max-h-96 space-y-2 overflow-auto rounded-sm border border-cyan-500/20 bg-[#060a16] p-3 font-mono text-xs text-slate-200">
+            <div className="max-h-96 space-y-2 overflow-auto rounded-sm border border-cyan-500/20 bg-[var(--cp-bg)] p-3 font-mono text-xs text-slate-200">
               {exportData.length === 0 ? (
                 <p className="text-slate-500">
                   No verified spam entries in active dataset.
@@ -367,7 +367,7 @@ export default function AdminPage() {
                 exportData.map((entry) => (
                   <div
                     key={`${entry.phone_number_e164}-${entry.category}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xs border border-cyan-500/15 bg-[#090f1e] px-3 py-2 hover:border-cyan-400/40 transition-colors"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xs border border-cyan-500/15 bg-[var(--cp-surface)] px-3 py-2 hover:border-cyan-400/40 transition-colors"
                   >
                     <div>
                       <p className="font-bold text-white tracking-wider">
@@ -380,7 +380,7 @@ export default function AdminPage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <span className="text-[11px] text-[#00ff9d]">
+                      <span className="text-[11px] text-[var(--cp-green)]">
                         {entry.unique_reporter_count} Unique Nodes
                       </span>
                     </div>
@@ -400,7 +400,7 @@ export default function AdminPage() {
               <p className="page-eyebrow">
                 TRIAGE QUEUE // OPERATOR DISPOSITION
               </p>
-              <h2 className="text-xl font-bold font-orbitron text-white mt-1">
+              <h2 className="text-xl font-bold font-display text-white mt-1">
                 Contested & Open Removals.
               </h2>
             </div>
@@ -422,7 +422,7 @@ export default function AdminPage() {
               {requests.map((req) => (
                 <div
                   key={req.id}
-                  className="rounded-sm border border-cyan-500/20 bg-[#060a16] p-4 space-y-3 font-mono text-xs"
+                  className="rounded-sm border border-cyan-500/20 bg-[var(--cp-bg)] p-4 space-y-3 font-mono text-xs"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-500/10 pb-2">
                     <div className="flex items-center gap-3">

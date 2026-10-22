@@ -120,13 +120,11 @@ export function TurnstileWidget({
   }, [resetKey, action]);
 
   return (
-    <div
-      className={`rounded-sm border border-cyan-500/20 bg-[#060b17] p-2.5 ${className ?? ""}`}
-    >
+    <div className={`cyber-inset p-2.5 ${className ?? ""}`}>
       <div className="mb-2 flex items-center justify-between font-mono text-[11px] text-cyan-400">
         <span className="flex items-center gap-1.5">
           <span
-            className={`h-1.5 w-1.5 rounded-full ${isVerified ? "bg-[#00ff9d] shadow-[0_0_8px_#00ff9d]" : "bg-amber-400 animate-pulse"}`}
+            className={`h-1.5 w-1.5 ${isVerified ? "bg-[#00ff88] shadow-[0_0_8px_#00ff88]" : "bg-amber-400 animate-pulse"}`}
           />
           // CYBER_DEFENSE_GATEWAY
         </span>

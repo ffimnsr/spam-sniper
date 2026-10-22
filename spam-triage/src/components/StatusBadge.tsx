@@ -16,14 +16,14 @@ const statusConfig: Record<
 > = {
   verified_spam: {
     badgeClass:
-      "border-[#ff0055]/70 bg-[#ff0055]/15 text-[#ff3377] shadow-[0_0_15px_rgba(255,0,85,0.3)]",
-    dotClass: "bg-[#ff0055] animate-ping",
+      "border-pink-400/70 bg-pink-400/15 text-pink-300 shadow-[0_0_15px_rgba(255,42,109,0.3)]",
+    dotClass: "bg-pink-400 animate-ping",
     prefix: "CRITICAL",
     label: "Verified Spam",
   },
   suspected: {
     badgeClass:
-      "border-amber-500/70 bg-amber-500/15 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.25)]",
+      "border-amber-400/70 bg-amber-400/15 text-amber-300 shadow-[0_0_15px_rgba(255,230,0,0.2)]",
     dotClass: "bg-amber-400",
     prefix: "WARNING",
     label: "Suspected",
@@ -44,14 +44,14 @@ const statusConfig: Record<
   },
   removed: {
     badgeClass:
-      "border-slate-600/70 bg-slate-800/40 text-slate-400 shadow-none",
+      "border-slate-700/70 bg-slate-900/40 text-slate-400 shadow-none",
     dotClass: "bg-slate-500",
     prefix: "CLEARED",
     label: "Removed",
   },
   disputed: {
     badgeClass:
-      "border-yellow-500/70 bg-yellow-500/15 text-yellow-300 shadow-[0_0_15px_rgba(234,179,8,0.25)]",
+      "border-yellow-400/70 bg-yellow-400/15 text-yellow-300 shadow-[0_0_15px_rgba(255,230,0,0.2)]",
     dotClass: "bg-yellow-400",
     prefix: "CONTEST",
     label: "Disputed",
@@ -70,7 +70,7 @@ export function StatusBadge({
   showPrefix = true,
 }: StatusBadgeProps) {
   const config = statusConfig[status] || {
-    badgeClass: "border-slate-600 bg-slate-800 text-slate-300",
+    badgeClass: "border-slate-700 bg-slate-900 text-slate-300",
     dotClass: "bg-slate-400",
     prefix: "STATUS",
     label: status,
@@ -79,7 +79,7 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-sm border px-2.5 py-1 font-mono text-xs font-semibold uppercase tracking-wider backdrop-blur-sm",
+        "inline-flex items-center gap-1.5 border px-2.5 py-1 font-mono text-xs font-semibold uppercase tracking-wider backdrop-blur-sm",
         config.badgeClass,
         className,
       )}

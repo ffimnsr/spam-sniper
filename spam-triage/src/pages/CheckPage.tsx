@@ -147,7 +147,7 @@ export default function CheckPage() {
                 onError={() => setValue("turnstileToken", "")}
               />
               {errors.turnstileToken && (
-                <p className="font-mono text-xs text-[#ff3377]">
+                <p className="font-mono text-xs text-[var(--cp-pink)]">
                   <span>[ERR]</span> {errors.turnstileToken.message}
                 </p>
               )}
@@ -184,7 +184,7 @@ export default function CheckPage() {
             {result.found ? (
               <div className="space-y-4">
                 {/* Masked caller display and badge */}
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-cyan-500/30 bg-[#060a16] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-cyan-500/30 bg-[var(--cp-bg)] p-4">
                   <div>
                     <span className="font-mono text-xs text-slate-400 block mb-1">
                       MASKED TARGET SIGNATURE
@@ -194,6 +194,7 @@ export default function CheckPage() {
                         text={result.maskedNumber || ""}
                         as="span"
                         scrambleOnHover={false}
+                        autoGlitch={false}
                       />
                     </span>
                   </div>

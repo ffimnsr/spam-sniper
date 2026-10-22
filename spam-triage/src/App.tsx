@@ -6,6 +6,8 @@ import {
   Route,
   Routes,
 } from "react-router-dom";
+import { ConsoleAmbience } from "./components/ConsoleAmbience.tsx";
+import { CyberAmbience } from "./components/CyberAmbience.tsx";
 import { CyberReticle } from "./components/CyberReticle.tsx";
 import { SoundToggle } from "./components/SoundToggle.tsx";
 import { TerminalTicker } from "./components/TerminalTicker.tsx";
@@ -22,17 +24,11 @@ import ReportPage from "./pages/ReportPage.tsx";
 export default function App() {
   return (
     <BrowserRouter>
+      <div className="hazard-stripe" />
+      <ConsoleAmbience />
+      <CyberAmbience />
+
       <div className="app-shell">
-        {/* Subtle retro-futuristic CRT scanlines */}
-        <div className="app-shell__scanline" />
-
-        {/* Sweeping Radar Scanner Line */}
-        <div className="app-shell__sweeper" />
-
-        {/* Ambient neon nebula orbs */}
-        <div className="app-shell__glow app-shell__glow--left" />
-        <div className="app-shell__glow app-shell__glow--right" />
-
         {/* Live System Timestamp & Telemetry Banner */}
         <TerminalTicker />
 
@@ -44,7 +40,7 @@ export default function App() {
               className="app-brand group"
               onMouseEnter={() => soundFx.hover()}
             >
-              <div className="relative flex items-center justify-center p-2 rounded-sm border border-cyan-500/30 bg-[#070e1c] group-hover:border-cyan-400 group-hover:shadow-[0_0_15px_rgba(0,240,255,0.4)] transition-all">
+              <div className="relative flex items-center justify-center border border-cyan-500/30 bg-[var(--cp-surface)] p-2 transition-all group-hover:border-cyan-400 group-hover:shadow-[0_0_15px_rgba(0,240,255,0.4)]">
                 <CyberReticle size={26} className="text-cyan-400" />
               </div>
               <div className="app-brand__text">
@@ -96,7 +92,7 @@ export default function App() {
         </header>
 
         {/* Main Content Area */}
-        <main className="mx-auto flex w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
+        <main className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
           <section className="app-panel">
             <Routes>
               <Route path="/" element={<HomePage />} />
@@ -119,7 +115,7 @@ export default function App() {
                 <span className="font-bold tracking-wider text-slate-200">
                   SPAM SNIPER // TRIAGE
                 </span>
-                <span className="rounded-xs border border-cyan-500/30 px-1 text-[10px] text-cyan-400">
+                <span className="border border-cyan-500/30 px-1 text-[10px] text-cyan-400">
                   v2.4.0-CYBER
                 </span>
               </div>
@@ -140,7 +136,7 @@ export default function App() {
               <Link
                 to="/report"
                 onMouseEnter={() => soundFx.hover()}
-                className="text-slate-400 hover:text-[#ff0055] transition-colors"
+                className="text-slate-400 hover:text-pink-400 transition-colors"
               >
                 // TRANSMIT_SIGNAL
               </Link>

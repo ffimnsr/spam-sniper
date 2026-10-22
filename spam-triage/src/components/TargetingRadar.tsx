@@ -9,12 +9,12 @@ export function TargetingRadar({
 }: TargetingRadarProps) {
   return (
     <div
-      className={`relative flex items-center justify-center overflow-hidden rounded-full border border-cyan-500/30 bg-[#040814]/80 shadow-[0_0_20px_rgba(0,240,255,0.15)] ${className}`}
+      className={`relative flex items-center justify-center overflow-hidden rounded-full border border-cyan-500/30 bg-[var(--cp-bg)] shadow-[0_0_20px_rgba(0,240,255,0.15)] ${className}`}
       style={{ width: size, height: size }}
     >
       {/* Concentric Range Rings */}
       <div className="absolute inset-2 rounded-full border border-cyan-500/20" />
-      <div className="absolute inset-7 rounded-full border border-cyan-500/25 border-dashed" />
+      <div className="absolute inset-7 rounded-full border border-dashed border-cyan-500/25" />
       <div className="absolute inset-12 rounded-full border border-cyan-500/30" />
 
       {/* Crosshairs */}
@@ -38,11 +38,11 @@ export function TargetingRadar({
       <div className="relative z-10 h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#00f0ff]" />
 
       {/* Hostile Blip 1 */}
-      <div className="absolute top-6 right-8 h-1.5 w-1.5 rounded-full bg-[#ff0055] shadow-[0_0_8px_#ff0055] animate-ping" />
-      <div className="absolute top-6 right-8 h-1.5 w-1.5 rounded-full bg-[#ff0055]" />
+      <div className="absolute top-6 right-8 h-1.5 w-1.5 rounded-full bg-[#ff2a6d] shadow-[0_0_8px_#ff2a6d] animate-ping" />
+      <div className="absolute top-6 right-8 h-1.5 w-1.5 rounded-full bg-[#ff2a6d]" />
 
       {/* Friendly Node Blip 2 */}
-      <div className="absolute bottom-7 left-7 h-1 w-1 rounded-full bg-[#00ff9d] shadow-[0_0_6px_#00ff9d]" />
+      <div className="absolute bottom-7 left-7 h-1 w-1 rounded-full bg-[#00ff88] shadow-[0_0_6px_#00ff88]" />
 
       {/* Radar Readout Tag */}
       <span className="absolute bottom-1 right-2 font-mono text-[8px] text-cyan-400/80 pointer-events-none">
