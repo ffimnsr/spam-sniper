@@ -101,7 +101,7 @@ export function PhoneInput({
             value={selectedCountry}
             onChange={handleCountrySelect}
             disabled={disabled}
-            className="cyber-select w-full pl-3 pr-7 text-xs text-cyan-200 disabled:opacity-50"
+            className="cyber-select h-11 w-full pl-3 pr-7 text-xs text-cyan-200 disabled:opacity-50"
           >
             {POPULAR_COUNTRIES.map((c) => (
               <option
@@ -136,7 +136,7 @@ export function PhoneInput({
             aria-invalid={Boolean(error)}
             aria-describedby={error ? errorId : helper ? helperId : undefined}
             placeholder={placeholder || defaultPlaceholder}
-            className={`cyber-input w-full px-4 py-2.5 text-sm disabled:opacity-50 ${
+            className={`cyber-input h-11 w-full px-4 text-sm disabled:opacity-50 ${
               error ? "cyber-input--error text-red-100" : ""
             }`}
           />
