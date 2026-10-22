@@ -9,6 +9,8 @@ export interface Env {
   HASH_SECRET_PREVIOUS?: string;
   TURNSTILE_SECRET_KEY: string;
   HIDDEN_ADMIN_PATH: string;
+  ACCESS_TEAM_DOMAIN: string;
+  ACCESS_AUD: string;
   ENVIRONMENT?: string;
   RATE_LIMITER?: RateLimitBinding;
   RATE_LIMITER_WRITE?: RateLimitBinding;

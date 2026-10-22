@@ -38,9 +38,13 @@ Vite + React + TypeScript app with React Compiler enabled.
 - Set `HIDDEN_ADMIN_PATH` in Worker env (`wrangler.jsonc`) or `.dev.vars` for backend route.
 - `shared/admin-paths.ts` derives matching API paths from those env values.
 - The admin path is obfuscation, not a secret: `VITE_*` values are inlined into the public JS bundle.
-- **Admin authentication is handled by Cloudflare Access, not by the Worker.** Protect both the dashboard route (`/f4c9`) and its API base (`/api/f4c9/*`) with an Access application and policy.
-- The Worker requires `Cf-Access-Authenticated-User-Email` and `Cf-Access-Jwt-Assertion` headers. `workers_dev` is disabled so the custom-domain route is the only entry point.
-- Local development bypasses the Access header check only when `ENVIRONMENT=development` and the request host is local.
+- **Admin authentication is handled by Cloudflare Access, not by the Worker.** Protect both the dashboard route (`/f4c9`) and its API base (`/api/f4c9/*`) with one Access application and policy; the app may contain multiple destinations, which share one AUD tag.
+- The Worker does not trust header presence alone: it requires `Cf-Access-Authenticated-User-Email` and `Cf-Access-Jwt-Assertion`, then verifies the JWT signature against `https://$ACCESS_TEAM_DOMAIN/cdn-cgi/access/certs`, the `iss` host, the `ACCESS_AUD` audience, and `exp`/`nbf`. The operator email is read from the verified `email` claim.
+- `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` live in `wrangler.jsonc` `vars` (both are public values). An empty or wrong value fails closed: admin API returns `401` and logs `Cloudflare Access configuration missing`, while public endpoints keep working.
+- Access service-token JWTs carry `common_name` instead of `email`; they are rejected until a claim mapping is added.
+- `workers_dev` is disabled and preview URLs are off so the custom domain is the only entry point.
+- The dashboard route is served from static assets, so only Access protects it. The API is covered by Access at the edge and re-verified inside the Worker.
+- Local development bypasses Access only when `ENVIRONMENT=development` and the request host is local.
 - Removal request URLs use an unguessable public token, not the numeric row ID.
 - Public navigation does not expose admin entry.
 
@@ -126,5 +130,6 @@ npx wrangler secret put TURNSTILE_SECRET_KEY --env production
 ```
 
 - `VITE_TURNSTILE_SITE_KEY` is public frontend config, not a Worker secret.
-- Create a Cloudflare Access application covering both the hidden admin route (`/f4c9`) and its API base (`/api/f4c9/*`). The Worker rejects admin requests without Access identity headers, and `workers_dev` is disabled to prevent a bypass path.
+- Create one Cloudflare Access application covering both the hidden admin route (`/f4c9`) and its API base (`/api/f4c9/*`). Copy the application's AUD tag into `ACCESS_AUD` in `wrangler.jsonc`; set `ACCESS_TEAM_DOMAIN` to the Zero Trust team domain (`<team>.cloudflareaccess.com`). The Worker verifies the Access JWT, so a deleted, disabled, or mis-scoped Access app fails closed.
+- After deploying, check that a logged-out request to `/f4c9` and `/api/f4c9/summary` returns a redirect to `cloudflareaccess.com` (or `403`), not a Worker JSON response.
 - `ADMIN_PASSWORD` is no longer used. Remove the old secret with `npx wrangler secret delete ADMIN_PASSWORD`.

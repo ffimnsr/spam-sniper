@@ -2,6 +2,11 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { Env } from "../types.ts";
+import {
+  createAccessToken,
+  TEST_ACCESS_AUD,
+  TEST_ACCESS_TEAM_DOMAIN,
+} from "./access-token.ts";
 
 type SqlValue = string | number | bigint | null | Uint8Array;
 
@@ -141,6 +146,8 @@ export function makeTestEnv(db: SqliteD1Database): Env {
     HASH_SECRET: "test-secret",
     TURNSTILE_SECRET_KEY: "test-turnstile",
     HIDDEN_ADMIN_PATH: "/f4c9",
+    ACCESS_TEAM_DOMAIN: TEST_ACCESS_TEAM_DOMAIN,
+    ACCESS_AUD: TEST_ACCESS_AUD,
     ENVIRONMENT: "test",
   };
 }
@@ -150,6 +157,6 @@ export function accessHeaders(
 ): Record<string, string> {
   return {
     "cf-access-authenticated-user-email": email,
-    "cf-access-jwt-assertion": "test-access-jwt",
+    "cf-access-jwt-assertion": createAccessToken({ email }),
   };
 }

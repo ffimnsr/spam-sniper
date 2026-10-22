@@ -7,6 +7,7 @@ import {
 } from "../../shared/admin-paths.ts";
 import { encryptE164 } from "../lib/encryption.ts";
 import { hashNumber } from "../lib/hash.ts";
+import { createAccessToken } from "../test/access-token.ts";
 import { accessHeaders, createTestDb, makeTestEnv } from "../test/sqlite-d1.ts";
 import type { Env } from "../types.ts";
 import {
@@ -118,6 +119,22 @@ describe("admin API with Cloudflare Access", () => {
       adminRequest(getAdminSummaryApiPath(ADMIN_PATH), { access: false }),
       env,
     );
+    expect(response.status).toBe(401);
+  });
+
+  it("rejects a token issued for another Access application", async () => {
+    const response = await handleAdminSummary(
+      new Request(`https://example.com${getAdminSummaryApiPath(ADMIN_PATH)}`, {
+        headers: {
+          ...accessHeaders(),
+          "cf-access-jwt-assertion": createAccessToken({
+            aud: ["another-application"],
+          }),
+        },
+      }),
+      env,
+    );
+
     expect(response.status).toBe(401);
   });
 

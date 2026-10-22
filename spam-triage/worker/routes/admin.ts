@@ -52,8 +52,11 @@ export function matchAdminResolvePath(
   return Number.isSafeInteger(id) ? id : null;
 }
 
-function requireAdmin(request: Request, env: Env): AuditActor | Response {
-  const actor = getAccessActor(request, env);
+async function requireAdmin(
+  request: Request,
+  env: Env,
+): Promise<AuditActor | Response> {
+  const actor = await getAccessActor(request, env);
   if (!actor) {
     return jsonError(
       "Cloudflare Access authentication required",
@@ -203,7 +206,7 @@ export async function handleAdminSummary(
     return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
   }
 
-  const actor = requireAdmin(request, env);
+  const actor = await requireAdmin(request, env);
   if (actor instanceof Response) return actor;
 
   return json(await getAdminSummaryData(env));
@@ -217,7 +220,7 @@ export async function handleAdminRemovalRequests(
     return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
   }
 
-  const actor = requireAdmin(request, env);
+  const actor = await requireAdmin(request, env);
   if (actor instanceof Response) return actor;
 
   const url = new URL(request.url);
@@ -244,7 +247,7 @@ export async function handleAdminResolve(
     return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
   }
 
-  const actor = requireAdmin(request, env);
+  const actor = await requireAdmin(request, env);
   if (actor instanceof Response) return actor;
 
   const url = new URL(request.url);
@@ -406,7 +409,7 @@ export async function handleAdminExport(
     return jsonError("Method not allowed", 405, "METHOD_NOT_ALLOWED");
   }
 
-  const actor = requireAdmin(request, env);
+  const actor = await requireAdmin(request, env);
   if (actor instanceof Response) return actor;
 
   const url = new URL(request.url);

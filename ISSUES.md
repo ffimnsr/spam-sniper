@@ -283,8 +283,9 @@ Required Cloudflare Services:
 
 - [x] Configure Cloudflare Access.
   - [x] Protect the hidden dashboard route.
-  - [x] Protect the admin API base path.
+  - [x] Protect the admin API base path with the same Access application.
   - [x] Require Access identity headers in the Worker.
+  - [x] Verify the Access JWT signature, issuer, audience, and expiry in the Worker.
   - [x] Disable `workers_dev` to prevent bypass.
 
 - [x] Create `.dev.vars` for local development.
@@ -1051,6 +1052,8 @@ Required Cloudflare Services:
   - [x] Require `Cf-Access-Authenticated-User-Email`.
   - [x] Require `Cf-Access-Jwt-Assertion`.
   - [x] Reject missing headers.
+  - [x] Validate the JWT against the team-domain JWKS and the app AUD tag.
+  - [x] Derive the operator email from the verified claim.
   - [x] Return 401 JSON error.
 
 ---
@@ -1429,6 +1432,8 @@ Required Cloudflare Services:
   - [ ] Set `TURNSTILE_SECRET_KEY`.
   - [ ] Set `HASH_SECRET_PREVIOUS` only during key rotation.
   - [ ] Configure Cloudflare Access for the dashboard and admin API paths.
+  - [ ] Set `ACCESS_TEAM_DOMAIN` and the application `ACCESS_AUD` tag in `wrangler.jsonc`.
+  - [ ] Confirm logged-out `/f4c9` and `/api/f4c9/summary` redirect to Access instead of returning Worker JSON.
 
 - [ ] Deploy Worker.
   - [ ] Run deploy command.
@@ -1511,6 +1516,7 @@ Required Cloudflare Services:
 
 - [x] Remove admin passwords and stateless admin tokens.
 - [x] Require Cloudflare Access identity headers on admin routes.
+- [x] Verify the Access JWT signature, issuer, audience, and expiry instead of trusting header presence.
 - [x] Disable `workers_dev` so the custom domain route is the only entry point.
 - [x] Add `v2:` number/reporter hash versions with previous-secret dual read.
 - [x] Add AES-GCM previous-key decryption for secret rotation.

@@ -29,6 +29,10 @@
   ],
   "vars": {
     "HIDDEN_ADMIN_PATH": "/f4c9",
+    "ACCESS_TEAM_DOMAIN": "ifn4.cloudflareaccess.com",
+    // Application Audience (AUD) tag from the Access app covering /f4c9 and
+    // /api/f4c9/*. If this is stale or wrong, admin API calls fail closed (401).
+    "ACCESS_AUD": "dffaab39410f20005e6d17ba79125f92c7325cacd9aecdc7cfc24acfc73f070a",
     "ENVIRONMENT": "production"
   },
   "ratelimits": [

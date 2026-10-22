@@ -9,6 +9,8 @@ function makeEnv(): Env {
     HASH_SECRET: "secret",
     TURNSTILE_SECRET_KEY: "turnstile",
     HIDDEN_ADMIN_PATH: "/hidden",
+    ACCESS_TEAM_DOMAIN: "test.cloudflareaccess.com",
+    ACCESS_AUD: "test-aud",
   };
 }
 
